@@ -2,6 +2,7 @@
 # Para imprimir la factura de venta
 
 PRINTER="$1"
+PRINTER="$2"
 
 DATALPR="-P$PRINTER $PRINTER.txt"
 
