@@ -1,0 +1,318 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2007 Jose Antonio Cely Saidiza
+*  Email jose.cely@gmail.com
+*  Bogotá Colombia
+****************************************************************************/
+
+/**
+* objeto para manejo de autenticación, usuarios y sesiones, apoyado en MySQL
+* @author Jose Antonio Cely Saidiza <jose.cely@gmail.com>
+* @version 0.01
+* TODO: 
+* - Funciones de depuración
+* - Documentar más a fondo
+*/
+class User_sesion {
+
+    // id del usuario en caso de tener session iniciada
+	private $id;
+    // nombre de usuario en caso de tener session iniciada 
+	private $user_name;
+    // tiempo maximo de inactividad para destruir la session
+	private $timeout = 14400;   // Cuatro horas de actividad
+	// indicador de session activa
+    private $logedin;
+    // informacion de errores de login
+	private $errorlogin;
+    // informacion de cierres de session
+	private $sessionclose;
+    
+	function __construct($tipodoc = null){
+		global $db, $session_name;	
+        
+        session_name($session_name);
+        session_start();
+        
+        if ($_SESSION['id'] != ''){ // si existe una session activa, la valida
+            $this->Check_session();           
+        }
+	}
+
+	/**
+        * Verifica validez de una sesion, la cierra por inactividad o cambio de direccion IP
+        */	
+	public function Check_session() {
+		global $db, $theip, $ahora, $INTRANET;
+        
+        $limite = $ahora-$this->timeout;
+        $sess = $db->get_row("SELECT id, name, ip, fecha FROM sesiones_activas WHERE id = '".$_SESSION['id']."'");
+
+        if ($sess->ip != $theip ) {		// Si cambio de ip, cierra la session
+            
+            $db->query("DELETE FROM sesiones_activas WHERE id = '".$_SESSION['id']."'");
+            // destruyo la session
+            $_SESSION = array();
+            session_destroy();
+            $this->sessionclose = "SESSION CERRADA AUTOMATICAMENTE POR CAMBIO DE DIRECCION IP";
+            $this->id=null;
+            $this->user_name=null;            
+            $this->logedin=false;
+            return false;
+        
+        } else if ($limite > $sess->fecha AND !$INTRANET) {  // si paso el tiempo de inactividad y no esta en la intranet
+            
+            $db->query("DELETE FROM sesiones_activas WHERE id = '".$_SESSION['id']."'");
+            // destruyo la session
+            $_SESSION = array();
+            session_destroy();
+            $this->sessionclose = "SESSION CERRADA AUTOMATICAMENTE POR INACTIVIDAD";
+            $this->logedin=false;
+            $this->id=null;
+            $this->user_name=null;              
+            return false;
+
+        } else { // Si todo esta correcto actualiza fecha de actividad
+            $this->id=$sess->id;
+            $this->user_name=$sess->name;
+            $db->query("UPDATE sesiones_activas SET fecha = '$ahora' WHERE id = '".$_SESSION['id']."'");  // actualizo el tiempo  		
+            $this->logedin=true;
+        }
+
+	}
+
+	/**
+        * Retorna verdadero si existe algun usuario logeado, falso si no esta ningun usuario
+        */	
+	public function IsLogedIn() {	
+		return $this->logedin;
+	}
+
+	/**
+        * Retorna verdadero si el usuario es tiene permisos root
+        */	
+	public function IsRoot() {	
+		return $_SESSION['root'];
+	}
+    
+	/**
+        * Retorna el Id del usuario activo
+        */	
+	public function GetUserId() {	
+		return $this->id;
+	}
+    
+	/**
+        * Retorna el nombre del usuario Activo
+        */	
+	public function GetUserName() {	
+		return $this->user_name;
+	}
+    
+	/**
+        * Destruye una session
+        */	
+	public function Destroy() {
+        global $db;
+        
+        if ($_SESSION['id'] != ''){ // valida primero que este activa la session
+            $db->query("DELETE FROM sesiones_activas WHERE id = '".$_SESSION['id']."'");
+            // destruyo la session
+            $_SESSION = array();
+            session_destroy();
+            $this->sessionclose = "SESSION CERRADA CORRECTAMENTE";
+            $this->id=null;
+            $this->user_name=null;            
+            $this->logedin=false;
+            return true;
+        } else {
+            return false;
+        }
+    } 
+    
+	/**
+    * Autentica un usuario
+    * @param $user - el nombre de USUARIO
+    * @paran $pass  - el PASSWORD
+    */	
+	public function Login($user, $pass) {
+        global $db, $theip, $ahora, $session_name;
+        
+        if ($_SESSION['id'] != ''){ // si existe alguna session activa la cierra        
+            $this->Destroy();
+        }
+
+		if ($user == "" || $pass == "") {  	// si los campos estan en blanco
+			$this->errorlogin="USUARIO Y/O PASSWORD NO PUEDEN SER VACIOS";			// errorlogin es la variable que guardara los errores
+			$this->logedin=false;
+			return false;
+		} else if (strlen($user) < 3 || strlen($pass) < 4 ) { 	// comprueba que la clave este y es password este dentro de los tamaños validos
+			$this->errorlogin="USUARIO Y/O PASSWORD MUY CORTOS";
+			$this->logedin=false;
+			return false;
+		} else {
+			// adecuar a la base de datos de usuarios
+			$sql="SELECT Password, Login, id FROM Actor WHERE Login = '".$user."' AND TipoActor like '%-1-%'";
+			
+			if (!$userinfo = $db->get_row($sql)) {
+				$this->errorlogin="USUARIO NO EXISTE";			// reporta erro porque el usuario no existe
+				$this->logedin=false;
+				return false;
+				
+			} else {
+				
+				$claveencriptada = md5($pass);		// encripto la contrseña con md5
+				if ($claveencriptada == $userinfo->Password){	// si casa dentro de este if es que debe inicair sesion y actualizar el ultimo login
+					
+					$_SESSION = array();		//destruyo la sesion invalida
+					session_destroy();
+					session_name($session_name);
+					session_start();		// inicia sesion
+					
+					$_SESSION['id']=$userinfo->id;
+					$_SESSION['user_name']=$userinfo->Login;
+					
+					
+					/* para logistica */
+					
+					$_SESSION['empresa']=$_POST['empresa'];
+					$_SESSION['empresa_nombre']=$db->get_var("SELECT Nombre1 FROM Actor WHERE id = '".$_POST['empresa']."'");
+
+					$coninveta = $db->get_row("SELECT Inventarios, Estados, Usos FROM InventarioAcceso WHERE Actor = '".$userinfo->id."'");
+
+					$_SESSION['PermsFabricante']=explode('-', $coninveta->Inventarios); // permsisos de inventarios
+					$_SESSION['PermsEstado']=explode('-', $coninveta->Estados);
+					$_SESSION['PermsUso']=explode('-', $coninveta->Usos);
+										 
+					if ($consedes = $db->get_results("SELECT id_Actor, id_Sede FROM Sedesee WHERE id_User = '".$userinfo->id."'")) {
+						foreach($consedes AS $consede) {
+							
+							$sedesin[$consede->id_Actor][]=$consede->id_Sede;
+						}
+						$_SESSION['PermsSedes']=$sedesin;
+					} else {
+						$_SESSION['PermsSedes']=NULL;
+					}
+					
+					$this->id=$userinfo->id;
+					$this->user_name=$userinfo->Login;
+					
+					// ingreso información de sesion activa
+					$db->query("INSERT INTO sesiones_activas (id, ip, fecha, name) VALUES ('".$this->id."', '$theip', '$ahora', '".$this->user_name."')");	
+					$this->logedin=true;
+					// Cargo permisos
+					
+					$sql2 = "SELECT menu1, menu2, menu3, menu4, menu5, menu6, menu7, menu8, menu9 FROM User_perms WHERE id = '".$userinfo->id."'";
+					$perm=$db->get_row($sql2);
+					$_SESSION['perms'][1]=$perm->menu1;
+					$_SESSION['perms'][2]=$perm->menu2;
+					$_SESSION['perms'][3]=$perm->menu3;
+					$_SESSION['perms'][4]=$perm->menu4;
+					$_SESSION['perms'][5]=$perm->menu5;
+					$_SESSION['perms'][6]=$perm->menu6;
+					$_SESSION['perms'][7]=$perm->menu7;
+					$_SESSION['perms'][8]=$perm->menu8;
+					$_SESSION['perms'][9]=$perm->menu9;
+					
+					// consulta si es root
+					$root="SELECT TipoActor FROM Actor WHERE Login = '".$user."' AND TipoActor like '%-0-%'";
+					$root=$db->get_var($root);
+					if ($root) {
+						$_SESSION['root']=true;
+					} else {
+						$_SESSION['root']=false;
+					}
+					return true;
+					
+				} else { // si no coincidio el password
+				
+					$this->errorlogin="PASSWORD INCORRECTO";
+					$this->logedin=false;
+					return false;
+				}
+			}
+		} 
+	} 
+
+
+    /**
+    * Devuele el valor de los permisos del usuario para cargar opciones de menu
+    * 0 si no tiene permisos, 1 si es usuario y 2 si es administrador
+    * @param $menu -  el nombre del menu
+    */
+    function get_perms($menu)
+    {
+        if(!$this->logedin) {
+            return false;
+        } else {
+            return $_SESSION['perms'][$menu];            
+        }
+    }
+   
+	/**
+        * Cierra session
+        */	
+	public function Logout() {
+         return $this->Destroy();        
+    } 
+
+
+    /**
+    * registra una variable de session
+    * @param $var_name - el nombre de la variable
+    * @paran $var_val  - el valor de la variable
+    */
+    function set_var($var_name, $var_val)
+    {
+        if(!$this->logedin) { // valida que tenga una session iniciada y al menos nombre de variable
+            return false;
+        } else {
+            $_SESSION[$var_name] = $var_val;
+            return true;
+        }
+    }
+
+    /**
+    * Devuele el valor de una variable session
+    * @param $var_name -  el nombre de la variable
+    */
+    function get_var($var_name)
+    {
+        if(!$this->logedin) {
+            return false;
+        } else {
+            return $_SESSION[$var_name];            
+        }
+    }
+   
+
+    /**
+    * Devuele informacion de errores de login
+    */
+    function get_errorlogin()
+    {
+        return $this->errorlogin;
+    } 
+    
+    /**
+    * Devuele informacion de casos de cierre de session
+    */
+    function get_sessionclose()
+    {
+        return $this->sessionclose;
+    } 
+
+}
+?>

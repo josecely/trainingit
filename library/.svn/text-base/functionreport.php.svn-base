@@ -1,0 +1,119 @@
+<?php
+
+
+
+function makereport($typereport,$title,$items,$quanty) {
+
+include_once ("config.php");		 // informacion de conexion a la base de datos
+include "libchart/libchart.php";		// libreria de grficos
+
+$itemsview = explode ('|', $items);
+$quantyview = explode (',', $quanty);
+
+
+
+switch ($typereport) {   //	VC = Graficas de barras verticales, HC = Graficas de barras horizontales, PC = Graficas de tarta, LC = Graficas de linea, OC = otro queso
+
+
+case ("VC");				// Graficas de barras verticales
+{
+
+
+$chart = new VerticalChart();
+
+$i=0;
+foreach ($itemsview as $itemsviewnow) {			// este foreach es sacar la cantidad de info autoamticamente de los arrays
+$chart->addPoint(new Point("$itemsviewnow", $quantyview[$i]));
+$i++;
+} 	
+	$chart->setTitle("$title");
+	$chart->render("generated/generated.png");
+
+break;
+}
+
+
+case ("HC");				// Graficas de barras horizontales
+{
+
+	$chart = new HorizontalChart(600, 170);
+
+$i=0;
+foreach ($itemsview as $itemsviewnow) {			// este foreach es sacar la cantidad de info autoamticamente de los arrays
+$chart->addPoint(new Point("$itemsviewnow", $quantyview[$i]));
+$i++;
+} 	
+
+	$chart->setTitle("$title");
+	$chart->render("generated/generated.png");
+
+break;
+}
+
+case ("OC");				//Graficas de OTro chese
+{
+	$chart = new PieChart(500, 300);
+
+header("Content-type: image/png");	
+
+$i=0;
+foreach ($itemsview as $itemsviewnow) {			// este foreach es sacar la cantidad de info autoamticamente de los arrays
+$chart->addPoint(new Point("$itemsviewnow", $quantyview[$i]));
+$i++;
+} 	
+	$chart->setTitle("$title");
+	$chart->render();
+
+break;
+}
+
+
+
+
+case ("PC");				// Graficas de tarta
+{
+
+	$chart = new PieChart();
+
+$i=0;
+foreach ($itemsview as $itemsviewnow) {			// este foreach es sacar la cantidad de info autoamticamente de los arrays
+$chart->addPoint(new Point("$itemsviewnow", $quantyview[$i]));
+$i++;
+} 	
+	$chart->setTitle("$title");
+	$chart->render("generated/generated.png");
+
+break;
+}
+
+case ("LC");				//Graficas de linea
+{
+$chart = new LineChart();
+
+$i=0;
+foreach ($itemsview as $itemsviewnow) {			// este foreach es sacar la cantidad de info autoamticamente de los arrays
+$chart->addPoint(new Point("$itemsviewnow", $quantyview[$i]));
+$i++;
+} 	
+	$chart->setTitle("$title");
+	$chart->render("generated/generated.png");
+
+break;
+}
+
+
+default; // Default npi
+{
+
+echo "<b>Existe algun error en una especifiacion</b>";
+
+break;
+}
+
+}		// cierro switch
+
+
+
+} // cierro la función make report
+
+?>

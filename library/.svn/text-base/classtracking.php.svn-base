@@ -1,0 +1,120 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2007 Jose Antonio Cely Saidiza
+*  Email jose.cely@gmail.com
+*  Bogotá Colombia
+****************************************************************************/
+
+/**
+* objeto para Tracking de cambios de datos / acciones en un sistema
+* @author Jose Antonio Cely Saidiza <jose.cely@gmail.com>
+* @version 0.01
+* TODO: 
+* - Funciones de depuración
+* - Documentar más a fondo
+*/
+class Tracking {
+
+
+	/**
+        * Ingresa información de log
+        * @param    int  $group Grupo del log/track
+        * @param    int  $user Id del usuario
+        * @param    int  $code codigo de log/track
+        * @param    string  $desc Descripcion opcional
+        * @param    string  $before Informacion anterior opcional
+        */
+	public function PutTrack($group,$user,$code,$desc = NULL,$before = NULL) {
+        global $db, $ahora;
+        
+        if ($ahora == '') {
+            $ahora = time();
+        }
+        
+        $sqltrack="INSERT INTO `tracking` ( `User` , `Group` , `Code` , `Date` , `Description` , `Before` ) VALUES (
+        '".$user."', '".$group."', '".$code."', '".$ahora."', '".$desc."', '".$before."');";
+        
+        if ($db->query($sqltrack)){ // si ingresa log
+                return true;
+        } else {
+                return false;
+        }
+	}
+
+    /**
+        * Retorna información de log
+        * @param    int  $group Grupo del log/track
+        * @param    int  $user Id del usuario
+        * @param    boolean  $formated  Si formatea del resultado, es decir convierte fechas a formatos visibles y codigos visibles
+        * @param    string  $dates Si filtra por fechas, las fechas pueden venir en formato unix o en formato date o en formato datetime y separadas por coma
+    */        
+    function GetTrack($group,$user,$formated = TRUE,$dates = FALSE) {
+        global $db, $lang;
+        
+        if ($lang == '') {
+            $lang ='es';
+        }
+        
+        $sqlmore="";
+        if ($dates) {
+            $fechas=explode(',', $dates);
+            $quees=explode('-', $fechas[0]);
+            if(count($quees) > 1){ // si es date o date time
+               $fecha1=convertunixtime($fechas[0]);
+               $fecha2=convertunixtime($fechas[1]);
+            } else { // si no, se asume time stamp
+               $fecha1=$fechas[0];
+               $fecha2=$fechas[1];            
+            }
+            $sqlmore="WHERE tracking.Date >= '".$fecha1."' AND tracking.Date <= '".$fecha2."'";
+        }
+        
+        if ($user > 0)  {
+            if ($sqlmore=='') {
+                 $sqlmore="WHERE tracking.User = '".$user."'";
+            } else {
+                 $sqlmore.=" AND tracking.User = '".$user."'";                
+            }            
+        }
+        
+        if ($group > 0)  {
+            if ($sqlmore=='') {
+                 $sqlmore="WHERE tracking.Group = '".$group."'";
+            } else {
+                 $sqlmore.=" AND tracking.Group = '".$group."'";                
+            }            
+        }
+                
+        $sql="SELECT tracking.User, tracking.Group, tracking.Code, tracking.Date, tracking.Description, tracking.Before, Actor.Nombre1, Actor.Nombre2, trackingcode.desc_".$lang." AS Codedescription
+        FROM `tracking`
+        LEFT JOIN Actor ON tracking.User = Actor.id
+        LEFT JOIN trackingcode ON tracking.Code = trackingcode.id $sqlmore";
+        if ($tracks=$db->get_results($sql)){ // retornara un array en el orden "fecha, usuario, codigo, grupo, descripcion, antes"
+                foreach ($tracks AS $track) {
+                    $fechin=date('Y-m-d H:i', $track->Date);	
+                    if ($formated) { // si es salida formateada
+                        $tracksillo[]=array($fechin, ''.$track->Nombre1.' '.$track->Nombre2.'', $track->Codedescription, $track->Group, $track->Description, $track->Before);
+                    } else {
+                        $tracksillo[]=array($track->Date, $track->User, $track->Code, $track->Group, $track->Description, $track->Before);                        
+                    }
+                }
+                return $tracksillo;
+        } else  {
+                return FALSE;
+        }
+    } 
+
+}
+?>

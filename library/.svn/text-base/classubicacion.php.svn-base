@@ -1,0 +1,264 @@
+<?php
+/**
+ *  Objeto Ubicacion, contiene todas las llamadas necesarias para crear y validar ubicaciones
+ *
+ * @author    Orlando Contreras, Jose Antonio Cely Saidiza
+ * @version   0.9
+ * @copyright GPL v2
+ */
+class ubicacion {
+    
+    protected $col;
+    protected $row;
+
+    /**
+    * Crea tabla Ubicacion basandose en Ubicaciones
+    * @access protected
+    */
+    public function PrintUbicacion( $arregloid, $only = FALSE){
+        
+        global $db;
+        if ($only) {
+            if($this->IsUbicacion($arregloid)){
+                $arrtoprint[]=$arregloid;
+                return $arrtoprint;
+            } else {
+                return false;
+            }
+        } else {
+            foreach ($arregloid as $arrid) {
+                $sql = "SELECT * FROM Ubicaciones WHERE id=" .$arrid . "";
+                $ubic = $db->get_row($sql);
+                for ($this->col = $ubic->Col_Desde; $this->col <= $ubic->Col_Hasta; $this->col++ ){
+                    for ($this->row = ord($ubic->Fila_Desde); $this->row <= ord($ubic->Fila_Hasta); $this->row++){
+                        $arrtoprint[] = "".$ubic->Bodega ."".$ubic->Numero ."". $ubic->Rack ."". $this->col ."". chr($this->row) ."". $ubic->Piso. "";
+                        }
+                    }
+                }
+            }
+        return $arrtoprint;
+}
+
+    /**
+    * Crea tabla Ubicacion basandose en Ubicaciones
+    * @access protected
+    */
+    public function BuildUbicacion(){
+        
+        global $db;
+
+        $sql="TRUNCATE TABLE Ubicacion";
+        $db->query($sql);
+
+        $sql = "SELECT * FROM Ubicaciones ORDER BY Bodega, Rack, Col_Desde, Col_Hasta, Fila_Desde, Fila_Hasta, Piso";
+        $ubicaciones = $db->get_results($sql);
+        
+        if ($db->num_rows > 0){
+            foreach ($ubicaciones  as $ubic){
+                for ($this->col = $ubic->Col_Desde; $this->col <= $ubic->Col_Hasta; $this->col++ ){
+                    for ($this->row = ord($ubic->Fila_Desde); $this->row <= ord($ubic->Fila_Hasta); $this->row++){
+						if ($ubic->Piso > 0) {
+							$sql = "INSERT INTO Ubicacion (Ubicacion, Material) VALUES ('" . $ubic->Bodega . $ubic->Rack . $this->col . chr($this->row) ."1' , '". $ubic->Material . "');";
+							$db->query($sql);
+						}
+						if ($ubic->Piso > 1) { 
+							$sql = "INSERT INTO Ubicacion (Ubicacion, Material) VALUES ('" . $ubic->Bodega . $ubic->Rack . $this->col . chr($this->row) ."2' , '". $ubic->Material . "');";
+							$db->query($sql);						
+						}
+						if ($ubic->Piso > 2) {
+							$sql = "INSERT INTO Ubicacion (Ubicacion, Material) VALUES ('" . $ubic->Bodega . $ubic->Rack . $this->col . chr($this->row) . "3' , '". $ubic->Material . "');";
+							$db->query($sql);							
+						}
+						if ($ubic->Piso > 3) {
+							$sql = "INSERT INTO Ubicacion (Ubicacion, Material) VALUES ('" . $ubic->Bodega . $ubic->Rack . $this->col . chr($this->row) . "4' , '". $ubic->Material . "');";
+							$db->query($sql);							
+						}		
+						if ($ubic->Piso > 4) {
+							$sql = "INSERT INTO Ubicacion (Ubicacion, Material) VALUES ('" . $ubic->Bodega . $ubic->Rack . $this->col . chr($this->row) . "5' , '". $ubic->Material . "');";
+							$db->query($sql);							
+						}			
+						if ($ubic->Piso > 5) {
+							$sql = "INSERT INTO Ubicacion (Ubicacion, Material) VALUES ('" . $ubic->Bodega . $ubic->Rack . $this->col . chr($this->row) . "6' , '". $ubic->Material . "');";
+							$db->query($sql);							
+						}					
+						if ($ubic->Piso > 6) {
+							$sql = "INSERT INTO Ubicacion (Ubicacion, Material) VALUES ('" . $ubic->Bodega . $ubic->Rack . $this->col . chr($this->row) . "7' , '". $ubic->Material . "');";
+							$db->query($sql);							
+						}	
+						if ($ubic->Piso > 7) {
+							$sql = "INSERT INTO Ubicacion (Ubicacion, Material) VALUES ('" . $ubic->Bodega . $ubic->Rack . $this->col . chr($this->row) . "8' , '". $ubic->Material . "');";
+							$db->query($sql);							
+						}							
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+
+    /**
+    * Adiciona una nuevo segmento de Ubicaciones
+    * @param  smallint $Bodega id
+    * @param  char $Rack
+    * @param  tinyint $Col_Desde
+    * @param  tinyint $Col_Hasta
+    * @param  char $Fila_Desde
+    * @param  char $Fila_Hasta
+    * @param  tinyint $Piso
+    * @param  char $Dimensiones
+    * @param  tinyint $Material
+    * @access protected
+    */
+    public function AddUbicaciones($bod, $rack, $col_d, $col_h, $fil_d, $fil_h, $piso, $dim = '', $mat = '')    {
+        global $db;
+		
+		$rackss=explode(',', $rack);
+		foreach ($rackss AS $racks) {
+			if ($piso > 0) {
+				$sql = "INSERT INTO Ubicaciones (Bodega, Rack, Col_Desde, Col_Hasta, Fila_Desde, Fila_Hasta, Piso, Dimensiones, Material)  VALUES('$bod', '$racks', '$col_d', '$col_h', '$fil_d', '$fil_h', '1', '$dim', '$mat')";
+				$db->query($sql);
+			}
+			if ($piso > 1) { 
+				$sql = "INSERT INTO Ubicaciones (Bodega, Rack, Col_Desde, Col_Hasta, Fila_Desde, Fila_Hasta, Piso, Dimensiones, Material)  VALUES('$bod', '$racks', '$col_d', '$col_h', '$fil_d', '$fil_h', '2', '$dim', '$mat')";
+				$db->query($sql);				
+			}
+			if ($piso > 2) {
+				$sql = "INSERT INTO Ubicaciones (Bodega, Rack, Col_Desde, Col_Hasta, Fila_Desde, Fila_Hasta, Piso, Dimensiones, Material)  VALUES('$bod', '$racks', '$col_d', '$col_h', '$fil_d', '$fil_h', '3', '$dim', '$mat')";
+				$db->query($sql);						
+			}
+			if ($piso > 3) {
+				$sql = "INSERT INTO Ubicaciones (Bodega, Rack, Col_Desde, Col_Hasta, Fila_Desde, Fila_Hasta, Piso, Dimensiones, Material)  VALUES('$bod', '$racks', '$col_d', '$col_h', '$fil_d', '$fil_h', '4', '$dim', '$mat')";
+				$db->query($sql);						
+			}	
+			if ($piso > 4) {
+				$sql = "INSERT INTO Ubicaciones (Bodega, Rack, Col_Desde, Col_Hasta, Fila_Desde, Fila_Hasta, Piso, Dimensiones, Material)  VALUES('$bod', '$racks', '$col_d', '$col_h', '$fil_d', '$fil_h', '5', '$dim', '$mat')";
+				$db->query($sql);						
+			}	
+			if ($piso > 5) {
+				$sql = "INSERT INTO Ubicaciones (Bodega, Rack, Col_Desde, Col_Hasta, Fila_Desde, Fila_Hasta, Piso, Dimensiones, Material)  VALUES('$bod', '$racks', '$col_d', '$col_h', '$fil_d', '$fil_h', '6', '$dim', '$mat')";
+				$db->query($sql);						
+			}	
+			if ($piso > 6) {
+				$sql = "INSERT INTO Ubicaciones (Bodega, Rack, Col_Desde, Col_Hasta, Fila_Desde, Fila_Hasta, Piso, Dimensiones, Material)  VALUES('$bod', '$racks', '$col_d', '$col_h', '$fil_d', '$fil_h', '7', '$dim', '$mat')";
+				$db->query($sql);						
+			}	
+			if ($piso > 7) {
+				$sql = "INSERT INTO Ubicaciones (Bodega, Rack, Col_Desde, Col_Hasta, Fila_Desde, Fila_Hasta, Piso, Dimensiones, Material)  VALUES('$bod', '$racks', '$col_d', '$col_h', '$fil_d', '$fil_h', '8', '$dim', '$mat')";
+				$db->query($sql);						
+			}				
+		}
+		if(!$this->BuildUbicacion()){
+			return false;
+		} else {
+			return true;
+		}					
+	}
+
+    public function UpdUbicaciones($id, $bod, $rack, $col_d, $col_h, $fil_d, $fil_h, $piso, $dim = '', $mat = '')    {
+        global $db;
+        $sql = "UPDATE Ubicaciones SET Rack = '".$rack."', Col_Desde= '".$col_d."', Col_Hasta = '".$col_h."', Fila_Desde = '".$fil_d."', Fila_Hasta = '".$fil_h."', Piso = '".$piso."', Dimensiones = '".$dim."', Material = '".$mat."' WHERE id = '".$id."' LIMIT 1";
+        if (!$db->query($sql)) {
+            return false;
+        } else {
+            if(!$this->BuildUbicacion()){
+                return false;
+            } else {
+                return true;
+            }
+        }      
+    }
+
+public function DelUbicaciones($id)    {
+        global $db;
+        $sql = "DELETE FROM Ubicaciones WHERE id = ".$id." LIMIT 1";
+        if (!$db->query($sql)) {
+            return false;
+        } else {
+            if(!$this->BuildUbicacion()){
+                return false;
+            } else {
+                return true;
+            }
+        }      
+    }
+
+
+/**
+    * Ubicacion existe
+    * @access protected
+    */
+    function IsUbicacion($ubic){
+        global $db;
+        if (strlen($ubic) > 9) {
+        	return false;
+        } else {
+        
+        	return true;
+        }
+        $sql="SELECT * FROM Ubicacion WHERE Ubicacion = '$ubic'";
+        if ($db->query($sql)) {
+            return true;
+        } else {
+            return false;
+        }      
+    }
+
+
+    /**
+    * Verifica los datos de volumen
+    * @access protected
+    */
+    function CheckVol($dim_values)
+     {
+        trigger_error('Not Implemented!', E_USER_WARNING);
+    }
+
+    /**
+    * XXX
+    * 
+    * @param   $prodqty[][] XXX
+    * @access protected
+    */
+    public function SugestPositions( $Codigobarra)
+     {
+        global $db;
+		
+		$Grupo=$db->get_var("SELECT Grupo FROM Producto WHERE Codigobarra = '".$Codigobarra."'");
+		// intenta sugerir ubicacion en base a vacias
+		$sql="SELECT Ubicacion FROM `Ubicacion` WHERE Ubicacion NOT IN (SELECT DISTINCT (Ubicacion) FROM Existencia WHERE Seguro =0 AND Existe =1 ) AND Material = '".$Grupo."' limit 1";
+		if ($ubic=$db->get_var($sql)) {
+			return $ubic;
+		}
+		// si no a ocupadas
+		$sql="SELECT Ubicacion FROM `Ubicacion` WHERE  Material = '".$Grupo."' limit 1";
+		if ($ubic=$db->get_var($sql)) {
+			return $ubic;
+		}
+		// retorna false si no pudeo sugerir
+		return false;
+    }
+
+    /**
+    * XXX
+    * 
+    * @param   $rack XXX
+    * @access protected
+    */
+    protected function PrintLabel( $rack)
+     {
+        trigger_error('Not Implemented!', E_USER_WARNING);
+    }
+
+    /**
+    * XXX
+    * 
+    * @access protected
+    */
+    protected function GetRacks()
+     {
+        trigger_error('Not Implemented!', E_USER_WARNING);
+    }
+
+}
+?>

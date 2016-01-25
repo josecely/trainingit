@@ -1,0 +1,1215 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2007  TECSUA LTDA.
+*  Email jose.cely@tecsua.com
+*  Bogotá Colombia
+****************************************************************************/
+
+function doheader() {
+    global $db, $menu, $opcionmenu, $submenu, $lang, $ahora, $titulo, $theip, $sesion, $numeromenus, $fechahora,$privatekey; //se agrega privatekey para el captcha
+	
+    
+    if ( $_REQUEST[status] == 'destroy') {	// comprueba que tenga la orden de terminar session
+        $sesion->Destroy();
+    }  
+
+	if ($_POST['startaction'] == 'submitted') {	// si existe fomulario de login
+		//valida login
+		if ($sesion->Login($_POST['userr'], $_POST['pass'])){
+			$status='online'; // para el icono de en linea
+		} else {
+			$status='error';
+		}
+    }
+ 
+    // si hubo algun cambio en submenu    
+	if (isset($_REQUEST['submenu'])) { 
+		$sesion->set_var('submenu', $_REQUEST['submenu']);
+		$sesion->set_var('globalvar', '');
+	}
+	// si actualiza info de menus
+	if (isset($_REQUEST['menu'])) {
+		$sesion->set_var('menu', $_REQUEST['menu']);
+		$sesion->set_var('submenu', '');
+		$sesion->set_var('globalvar', '');
+        
+	}
+	if (isset($_REQUEST['opcionmenu'])AND !isset($_REQUEST['menu'])) {
+		$sesion->set_var('opcionmenu', $_REQUEST['opcionmenu']);
+		$sesion->set_var('submenu', '');
+		$sesion->set_var('globalvar', '');
+	}
+	if (!isset($_REQUEST['opcionmenu'])AND isset($_REQUEST['menu'])) {
+		$sesion->set_var('opcionmenu', '');
+		$sesion->set_var('submenu', '');
+		$sesion->set_var('globalvar', '');
+	}
+    // Varaibles para TODA la aplicación
+	$menu=$sesion->get_var('menu');
+	$opcionmenu=$sesion->get_var('opcionmenu');
+    $submenu=$sesion->get_var('submenu');
+    $globalvar=$sesion->get_var('globalvar');
+    
+	if (!$sesion->IsLogedIn()){ // si no esta en linea actualiza status para el icono
+        $menu="startsessionform";
+		$status='offline';
+	} else {
+        $status='online';   
+    }
+        
+    // permisos de usuario
+        
+	if (isset($_SESSION[empresa])){
+		$conempresa = $db->get_row("SELECT Nombre1, Login, URLogo, NumeroIdentificacion FROM `Actor` WHERE id = '".$_SESSION[empresa]."' AND TipoActor like '%-2-%'");
+		$lang=$conempresa->Login;
+	}
+    
+	?>
+	<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+	<head>
+	<title><?php if ($conempresa->Nombre1!=''){echo $conempresa->Nombre1;}else { echo "Service Part Warehouse Logistics";} ?></title>
+	<meta name="author" content="jose cely"/>
+	<meta name="copyright" content="GNU"/>
+	<meta name="description" content=""/>
+	<meta name="ROBOTS" content="NOINDEX, NOFOLLOW"/>
+	<meta http-equiv="content-type" content="text/html; charset=UTF-8"/>
+	<meta http-equiv="content-type" content="application/xhtml+xml; charset=UTF-8"/>
+	<link href="style.css" rel="stylesheet" type="text/css">
+
+	<?php require "javascript.php"; ?>	
+
+	</head>
+	<body leftmargin="0" marginheight="0" marginwidth="0" topmargin="0">
+
+	<?php
+
+    $sesioncerrada=$sesion->get_sessionclose();
+    if ($sesioncerrada!='') { // si se cerro la session
+        echo "<div align=\"center\"><h4>$sesioncerrada</h4></div>\n";
+    }
+	
+	echo "<div id=\"container\"><div id='leftcontent'> 
+			<div id=\"header\">
+			<img src=\"images/logowms.png\" align=\"left\" alt=\"$titulo\"><br />-----";
+							switch ($status)
+					{
+						case 'offline':
+						{
+                            echo "<div id=\"linkinblue\"><A HREF=\"index.php?menu=startsessionform\"><small> <B>"._START2."</B></small> </A></div>";
+						break;
+						}                                                                                     
+						case 'online':
+						{		
+                            echo "<div  id=\"linkinblue\"><A HREF=\"index.php?status=destroy\"><small> <B>".$sesion->GetUserName()."</B><br>"._LOGOUT2."</A> </small></div>";
+						break;
+						}                                                                                             
+						case 'error':
+						{		
+                            echo "<div id=\"linkinblue\"><img src=\"images/errorline.png\" alt=\"error\" align=\"right\" height=\"45\" width=\"45\">
+                            <A HREF=\"index.php?menu=startsessionform\"><small> <B>"._START2."</B></small> </A></div>";
+						break;
+						}                                                   
+						default:
+						{
+                            echo "----";
+						break;	
+						}	
+					} 
+			
+		echo "
+			<div id=\"navcontainer\">
+				<ul>";
+				    if($sesion->IsRoot()){ // si es administrador Raiz
+						if ($menu=='admin') {
+							echo "<li><img src=\"images/adminico.png\" width=\"40\" height=\"40\" alt=\""._ADMINISTRATION."\" /></li>
+						<li><a class=\"tover\" href=\"index.php?menu=admin\">"._ADMINISTRATION."</a></li>";
+						} else {
+							echo "<li><img src=\"images/adminico.png\" width=\"40\" height=\"40\" alt=\""._ADMINISTRATION."\" /></li>
+						<li><a href=\"index.php?menu=admin\">"._ADMINISTRATION."</a></li>";
+						}
+					}
+					
+					if ($numeromenus > 0){ // carga la cantidad de menus configurada
+						if ($sesion->get_perms('1') > 0 ) { // si tiene permisos
+							if ($menu=='1') {
+								echo "<li><img src=\"images/inventarioico.png\" width=\"40\" height=\"40\" alt=\""._MENU1."\" /></li>
+					<li><a class=\"tover\" href=\"index.php?menu=1\">"._MENU1."</a></li>";
+							} else {
+								echo "<li><img src=\"images/inventarioico.png\" width=\"40\" height=\"40\" alt=\""._MENU1."\" /></li>
+					<li><a href=\"index.php?menu=1\">"._MENU1."</a></li>";							}
+						}
+					}
+					
+					if ($numeromenus > 1){ // carga la cantidad de menus configurada
+						if ($sesion->get_perms('2') > 0 ) { // si tiene permisos
+							if ($menu=='2') {
+								echo "<li><img src=\"images/logisticaico.png\" width=\"40\" height=\"40\" alt=\""._MENU2."\" /></li>
+					<li><a class=\"tover\" href=\"index.php?menu=2\">"._MENU2."</a></li>";
+							} else {
+								echo "<li><img src=\"images/logisticaico.png\" width=\"40\" height=\"40\" alt=\""._MENU2."\" /></li>
+					<li><a href=\"index.php?menu=2\">"._MENU2."</a></li>";							}
+						}
+					}
+					
+					if ($numeromenus > 2){ // carga la cantidad de menus configurada
+						if ($sesion->get_perms('3') > 0 ) { // si tiene permisos
+							if ($menu=='3') {
+								echo "<li><img src=\"images/vehicularico.png\" width=\"40\" height=\"40\" alt=\""._MENU3."\" /></li>
+					<li><a class=\"tover\" href=\"index.php?menu=3\">"._MENU3."</a></li>";
+							} else {
+								echo "<li><img src=\"images/vehicularico.png\" width=\"40\" height=\"40\" alt=\""._MENU3."\" /></li>
+					<li><a href=\"index.php?menu=3\">"._MENU3."</a></li>";							}
+						}
+					}
+					
+				echo "</ul>
+			</div>
+		</div>
+	</div>";
+}
+
+function domenus() {
+	global $db, $menu, $opcionmenu, $sesion;
+
+	echo "<b>".$sesion->get_var('empresa_nombre')."</b><ul id=\"sddm\">";
+        if ($menu == 1) { // si es MENU1
+            if ($sesion->get_perms('1') > 0 ) { // si tiene permisos
+                if ($opcionmenu=='opcion10') {
+					echo "<li><a class=\"sdma\" onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion10\">"._OPTION10."</a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                } else {
+                    echo "<li><a onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion10\">"._OPTION10."</a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                }				
+                if ($opcionmenu=='opcion11') {
+                    echo "<li><a class=\"sdma\" onmouseover=\"mopen('m1')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion11\">"._OPTION11."</a><div id=\"m1\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                } else {
+                    echo "<li><a onmouseover=\"mopen('m1')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion11\">"._OPTION11."</a><div id=\"m1\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                }		
+
+                if ($sesion->get_perms('1') > 1 ) { // si tiene permisos admin
+					if ($opcionmenu=='opcion17') {
+						echo "<li><a class=\"sdma\" onmouseover=\"mopen('m7')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion17\">*&nbsp;"._OPTION17."</a><div id=\"m8\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+					} else {
+						echo "<li><a onmouseover=\"mopen('m7')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion17\">*&nbsp;"._OPTION17."</a><div id=\"m8\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+					}
+					
+					if ($opcionmenu=='opcion18') {
+						echo "<li><a class=\"sdma\" onmouseover=\"mopen('m8')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion18\">*&nbsp;"._OPTION18."</a><div id=\"m8\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+					} else {
+						echo "<li><a onmouseover=\"mopen('m8')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion18\">*&nbsp;"._OPTION18."</a><div id=\"m8\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+					}
+					
+					if ($opcionmenu=='opcion19') {
+						echo "<li><a class=\"sdma\" onmouseover=\"mopen('m9')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion19\">*&nbsp;"._OPTION19."</a><div id=\"m9\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+					} else {
+						echo "<li><a onmouseover=\"mopen('m9')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion19\">*&nbsp;"._OPTION19."</a><div id=\"m9\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+					}              
+                }
+            }
+        } else if ($menu == 2) { // si es MENU2
+            if ($sesion->get_perms('2') > 0 ) { // si tiene permisos        
+                if ($opcionmenu=='opcion20') {             
+                    echo "<li><a class=\"sdma\" onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion20\"> "._OPTION20." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                } else {
+                    echo "<li><a onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion20\"> "._OPTION20." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                }               
+                if ($opcionmenu=='opcion21') {             
+                    echo "<li><a class=\"sdma\" onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion21\"> "._OPTION21." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                } else {
+                    echo "<li><a onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion21\"> "._OPTION21." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                }
+                if ($opcionmenu=='opcion22') {             
+                    echo "<li><a class=\"sdma\" onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion22\"> "._OPTION22." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                } else {
+                    echo "<li><a onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion22\"> "._OPTION22." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                }
+  
+                if ($opcionmenu=='opcion23') {             
+                    echo "<li><a class=\"sdma\" onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion23\"> "._OPTION23." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                } else {
+                    echo "<li><a onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion23\"> "._OPTION23." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                }             
+                 if ($sesion->get_perms('2') > 1 ) { // si tiene permisos admin            
+
+					if ($opcionmenu=='opcion28') {             
+						echo "<li><a class=\"sdma\" onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion28\">*&nbsp; "._OPTION28." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+					} else {
+						echo "<li><a onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion28\"> *&nbsp;"._OPTION28." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+					}
+					if ($opcionmenu=='opcion29') {             
+						echo "<li><a class=\"sdma\" onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion29\">*&nbsp; "._OPTION29." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+					} else {
+						echo "<li><a onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion29\">*&nbsp; "._OPTION29." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+					}                
+                }                
+            }
+        } else if ($menu == 3) { // si es MENU3
+            if ($sesion->get_perms('3') > 0 ) { // si tiene permisos
+                if ($opcionmenu=='opcion30') {             
+                    echo "<li><a class=\"sdma\" onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion30\"> "._OPTION30." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                } else {
+                    echo "<li><a onmouseover=\"mopen('m0')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion30\"> "._OPTION30." </a><div id=\"m0\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                }
+                if ($sesion->get_perms('3') > 1 ) { // si tiene permisos admin
+                    if ($opcionmenu=='opcion39') {                 
+                        echo "<li><a class=\"sdma\" onmouseover=\"mopen('m9')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion39\">*&nbsp;"._OPTION39." </a><div id=\"m9\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                    } else {
+                        echo "<li><a onmouseover=\"mopen('m9')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=opcion39\">*&nbsp;"._OPTION39." </a><div id=\"m9\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+                    }                 
+                }                
+            }
+        } else if ($menu == 4) { // si es MENU4
+            if ($sesion->get_perms('4') > 0 ) { // si tiene permisos
+                if ($opcionmenu=='opcion40') {
+                    echo "<li><a class=\"tabactive\" href=\"?opcionmenu=opcion40\">&nbsp;&nbsp;"._OPTION40."&nbsp;&nbsp;</a></li>";
+                } else {
+                    echo "<li><a class=\"tab\" href=\"?opcionmenu=opcion40\">&nbsp;&nbsp;"._OPTION40."&nbsp;&nbsp;</a></li>";			
+                }
+				/*
+                if ($opcionmenu=='opcion41') {
+                    echo "<li><a class=\"tabactive\" href=\"?opcionmenu=opcion41\">&nbsp;&nbsp;"._OPTION41."&nbsp;&nbsp;</a></li>";
+                } else {
+                    echo "<li><a class=\"tab\" href=\"?opcionmenu=opcion41\">&nbsp;&nbsp;"._OPTION41."&nbsp;&nbsp;</a></li>";			
+                }
+				*/
+            }
+        } else if ($menu == 'admin') { // si es ADMIN
+            if ($opcionmenu=='userperms') {
+                echo "<li><a class=\"tabactive\" href=\"?opcionmenu=userperms\">&nbsp;&nbsp;"._USERPERMS."&nbsp;&nbsp;</a></li>";
+            } else {
+                echo "<li><a class=\"tab\" href=\"?opcionmenu=userperms\">&nbsp;&nbsp;"._USERPERMS."&nbsp;&nbsp;</a></li>";			
+            }
+            if ($opcionmenu=='opcion1') {
+                echo "<li><a class=\"tabactive\" href=\"?opcionmenu=opcion1\">&nbsp;&nbsp;"._OPTION1."&nbsp;&nbsp;</a></li>";
+            } else {
+                echo "<li><a class=\"tab\" href=\"?opcionmenu=opcion1\">&nbsp;&nbsp;"._OPTION1."&nbsp;&nbsp;</a></li>";			
+            }
+            if ($opcionmenu=='opcion2') {
+                echo "<li><a class=\"tabactive\" href=\"?opcionmenu=opcion2\">&nbsp;&nbsp;"._OPTION2."&nbsp;&nbsp;</a></li>";
+            } else {
+                echo "<li><a class=\"tab\" href=\"?opcionmenu=opcion2\">&nbsp;&nbsp;"._OPTION2."&nbsp;&nbsp;</a></li>";			
+            }             
+            if ($opcionmenu=='opcion3') {
+                echo "<li><a class=\"tabactive\" href=\"?opcionmenu=opcion3\">&nbsp;&nbsp;"._OPTION3."&nbsp;&nbsp;</a></li>";
+            } else {
+                echo "<li><a class=\"tab\" href=\"?opcionmenu=opcion3\">&nbsp;&nbsp;"._OPTION3."&nbsp;&nbsp;</a></li>";			
+            } 
+            if ($opcionmenu=='opcion4') {
+                echo "<li><a class=\"tabactive\" href=\"?opcionmenu=opcion4\">&nbsp;&nbsp;"._ADMINCOBRO."&nbsp;&nbsp;</a></li>";
+            } else {
+                echo "<li><a class=\"tab\" href=\"?opcionmenu=opcion4\">&nbsp;&nbsp;"._ADMINCOBRO."&nbsp;&nbsp;</a></li>";			
+            }                  
+        }
+     
+        if ($sesion->get_var('menu') != '') {
+         /*      if ($opcionmenu=='informe') {
+                echo "<li><a class=\"tabactive\" href=\"?opcionmenu=informe\">&nbsp;&nbsp;"._SUBINFORMES."&nbsp;&nbsp;</a></li>";
+            } else {
+                echo "<li><a class=\"tab\" href=\"?opcionmenu=informe\">&nbsp;&nbsp;"._SUBINFORMES."&nbsp;&nbsp;</a></li>";			
+            }   */       
+			if ($opcionmenu=='ayuda') {  		
+				echo "<li><a class=\"sdma\" onmouseover=\"mopen('m11')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=ayuda\"><img src=\"images/ayuda_mini.gif\" border=\"0\" top=\"?\"></a><div id=\"m11\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+			} else {
+				echo "<li><a onmouseover=\"mopen('m11')\" onmouseout=\"mclosetime()\" href=\"?opcionmenu=ayuda\"><img src=\"images/ayuda_mini.gif\" border=\"0\" top=\"?\"></a><div id=\"m11\" onmouseover=\"mcancelclosetime()\" onmouseout=\"mclosetime()\"></div></li>";
+			}
+		}
+	echo "</ul>\n";	
+}
+
+function dofother() {
+        global $cantidaddeconsultas, $datetime;
+		
+        echo "<div align=\"center\"><div class=\"pieinfo\"><div style=\"float:left;\" >";
+		if ($_SESSION['id'] != ''){	
+			echo "<a href=\"preferencias.php\">Preferencias</a>";
+		}		
+		echo "</div><div style=\"display: inline; float:right;\">&nbsp;\n";
+		echo "&nbsp; &nbsp;&nbsp; $datetime  &nbsp;&nbsp;";
+        echo "</div>&nbsp;</div>\n";
+	?>
+	<br>
+	<P align="center">
+	&copy; 2009. <a href="http://www.tecsua.com" target="_BLANK">TECSUA LTDA</a>, Bogotá Colombia - info@tecsua.com</p>
+        	<SCRIPT SRC="library/boxover.js"></SCRIPT>
+	</body>
+        </html>
+        <?php
+
+}
+
+function dodefault(){
+        global $db;
+        if ($_SESSION[empresa]!='') {
+                $conempresa = $db->get_row("SELECT Nombre1, URLogo FROM `Actor` WHERE id = '".$_SESSION[empresa]."'");        
+                echo "<br><div align=\"center\"><img src=\"$conempresa->URLogo\" align=\"top\"><br>$conempresa->Nombre1<br>"._SYSINFO."<br></div>";
+        } else {
+                echo "<br><div align=\"center\">----<br>$conempresa->Nombre1<br>"._SYSINFO."<br></div>\n";
+        }
+}
+
+function newbarra() {
+        global $db;
+
+	$bar = $db->get_row("SELECT MAX(`Barra`) AS Barra FROM `Consecutivo_barras`");
+	$prebarra=$bar->Barra+1;
+	$prebarra2=$prebarra;
+
+	if (($prebarra) < 10) {		// agrego ceros que hagan falta
+		$prebarra="0000"."$prebarra";
+	} else if (($prebarra) < 100) {
+		$prebarra="000"."$prebarra";
+	} else if (($prebarra) < 1000) {
+		$prebarra="00"."$prebarra";
+	} else if (strlen($prebarra) < 10000) {
+		$prebarra="0"."$prebarra";
+	} else {
+		$prebarra="$prebarra";
+	} 
+	
+	$barribiris="0-"."$prebarra";
+
+	$db->query("INSERT INTO `Consecutivo_barras` ( `Barra` ) VALUES ( '$prebarra2')"); // ACTUALIZO EL CONSECUTIVO
+	return $barribiris;
+}
+
+
+function formatdata4($col1,$col2,$col3,$col4,$col5,$col6,$col7,$col8,$col9) // para la matriz de usuarios    	    	    	 
+{
+	if ($col2) {
+		$col2="<input type=\"checkbox\" value=\"1\" name=\"admin$col9\" checked>";
+	} else {
+		$col2="<input type=\"checkbox\" value=\"1\" name=\"admin$col9\">";
+	}
+	if ($col3) {
+		$col3="<input type=\"checkbox\" value=\"1\" name=\"facturacion$col9\" checked>";
+	} else {
+		$col3="<input type=\"checkbox\" value=\"1\" name=\"facturacion$col9\">";
+	}
+	if ($col4) {
+		$col4="<input type=\"checkbox\" value=\"1\" name=\"inventario$col9\" checked>";
+	} else {
+		$col4="<input type=\"checkbox\" value=\"1\" name=\"inventario$col9\">";
+	}
+	if ($col5) {
+		$col5="<input type=\"checkbox\" value=\"1\" name=\"proveedores$col9\" checked>";
+	} else {
+		$col5="<input type=\"checkbox\" value=\"1\" name=\"proveedores$col9\">";
+	}
+	if ($col6) {
+		$col6="<input type=\"checkbox\" value=\"1\" name=\"bancosycaja$col9\" checked>";
+	} else {
+		$col6="<input type=\"checkbox\" value=\"1\" name=\"bancosycaja$col9\">";
+	}
+	if ($col7) {
+		$col7="<input type=\"checkbox\" value=\"1\" name=\"POS$col9\" checked>";
+	} else {
+		$col7="<input type=\"checkbox\" value=\"1\" name=\"POS$col9\">";
+	}
+	if ($col8) {
+		$col8="<input type=\"checkbox\" value=\"1\" name=\"contabilidad$col9\" checked>";
+	} else {
+		$col8="<input type=\"checkbox\" value=\"1\" name=\"contabilidad$col9\">";
+	}
+}
+
+
+function formatdatachange($col1,$col2,$col3,$col4,$col5,$col6,$col7,$col8,$col9,$col10,$col11,$col12,$col13,$col14) // para la interfaz de catualizacion de datos
+{
+        global $db;
+
+	$col2=trim($col2);
+	$col11=trim($col11);
+        $col2="<input type=\"hidden\" value=\"$col11\" name=\"NUIS[]\" id=\"NUIS[]\"><input type=\"text\" class=\"textformmini\" value=\"$col2\" onChange=\"CheckDiference('ubicacion$col11')\" name=\"ubicacion$col11\" id=\"ubicacion$col11\" size=\"7\" maxlength=\"10\"><input type=\"hidden\" value=\"$col2\" name=\"backup_ubicacion$col11\" id=\"backup_ubicacion$col11\">";
+
+        $col3="<input type=\"text\" class=\"textformmini\" value=\"$col3\" onChange=\"CheckDiference('serial1_$col11')\" name=\"serial1_$col11\" id=\"serial1_$col11\" size=\"13\" maxlength=\"100\"><input type=\"hidden\" value=\"$col3\" name=\"backup_serial1_$col11\" id=\"backup_serial1_$col11\">";
+	
+        $col4="<input type=\"text\" class=\"textformmini\" value=\"$col4\" onChange=\"CheckDiference('serial2_$col11')\" name=\"serial2_$col11\" id=\"serial2_$col11\" size=\"13\" maxlength=\"100\"><input type=\"hidden\" value=\"$col4\" name=\"backup_serial2_$col11\" id=\"backup_serial2_$col11\">";
+	
+        $col5="<input type=\"text\" class=\"textformmini\" value=\"$col5\" onChange=\"CheckDiference('serial3_$col11')\" name=\"serial3_$col11\" id=\"serial3_$col11\" size=\"13\" maxlength=\"100\"><input type=\"hidden\" value=\"$col5\" name=\"backup_serial3_$col11\" id=\"backup_serial3_$col11\">";
+        
+        $col6="<input type=\"text\" class=\"textformmini\" value=\"$col6\" onChange=\"CheckDiference('serial4_$col11')\" name=\"serial4_$col11\" id=\"serial4_$col11\" size=\"13\" maxlength=\"100\"><input type=\"hidden\" value=\"$col6\" name=\"backup_serial4_$col11\" id=\"backup_serial4_$col11\">";
+
+        $col10="<input type=\"text\" class=\"textformmini\" value=\"$col10\" onChange=\"CheckDiference('qty_$col11')\" name=\"qty_$col11\" id=\"qty_$col11\" size=\"5\" maxlength=\"10\"><input type=\"hidden\" value=\"$col10\" name=\"backup_qty_$col11\" id=\"backup_qty_$col11\">";
+  
+		$select="<select class=\"textformmini\" onChange=\"CheckDiference('estado$col11')\" name=\"estado$col11\" id=\"estado$col11\">\n";
+	$sql="SELECT id, Descripcion FROM EstadoExistencia WHERE Actor = '".$col14."'";
+	if ( $inforegistro= $db->get_results($sql)) {
+		foreach( $inforegistro as $inforeg )
+		{
+                        if ($inforeg->id==$col12) {
+                                $select.="<option selected style=\"font-weight: bold\" value='$inforeg->id'>$inforeg->Descripcion</option>\n";                                
+                        } else {
+                                $select.="<option value='$inforeg->id'>$inforeg->Descripcion</option>\n";
+                        }
+		}                
+	}
+    $select.="</select><input type=\"hidden\" value=\"$col12\" name=\"backup_estado$col11\" id=\"backup_estado$col11\">";
+    $col7=$select;
+    $select="<select class=\"textformmini\" onChange=\"CheckDiference('uso$col11')\" name=\"uso$col11\" id=\"uso$col11\">\n";
+	$sql="SELECT id, Descripcion FROM UsoExistencia WHERE Actor = '".$col14."'";
+	if ( $inforegistro= $db->get_results($sql)) {
+		foreach( $inforegistro as $inforeg )
+		{
+			if ($inforeg->id==$col13) {
+					$select.="<option selected style=\"font-weight: bold\" value='$inforeg->id'>$inforeg->Descripcion</option>\n";                                
+			} else {
+					$select.="<option value='$inforeg->id'>$inforeg->Descripcion</option>\n";
+			}
+		}                
+	}
+        $select.="</select><input type=\"hidden\" value=\"$col13\" name=\"backup_uso$col11\" id=\"backup_uso$col11\">";
+        $col8=$select;
+}
+
+
+function formatdata5($col1,$col2,$col3,$col4,$col5,$col6) {// para los permisos de inventario
+	global $db;
+        
+        $id=$col1;
+        
+        $col1="<form action=\"";
+	$col1.=$_SERVER['PHP_SELF'];
+        $col1.="\" method=\"POST\">";                
+        $col1.="<input type=\"hidden\" name=\"Actor\" value=\"$id\">";
+        $col1.="<input type=\"hidden\" name=\"Nombres\" value=\"$col2 $col3\">";
+        $col1.="<input type=\"submit\" class=\"tablemakebutton\" name=\"cambiaractor\" VALUE=\""._CHANGE."\"></form>\n";
+        
+        if ($col4=='' OR $col4 == '-') {
+                $col4="Ninguno";
+        } else {
+                $fabricantes=explode('-', $col4);
+                if ($fabricantes!='') {
+                        $col4='';
+                        foreach ($fabricantes AS $fabricante){
+                                if ($fabricante!='') {
+                                        $name=$db->get_var("SELECT Nombre1 FROM Actor WHERE id = '".$fabricante."'");
+                                        $col4.="- $name<br>\n";
+                                }
+                        }
+                }                
+        }
+        if ($col5=='' OR $col5 == '-') {
+                $col5="Ninguno";
+        } else {
+                $estados=explode('-', $col5);
+                if ($estados!='') {
+                        $col5='';
+                        foreach ($estados AS $estado){
+                                if ($estado!='') {
+                                        $names=$db->get_row("SELECT Actor.Nombre1, EstadoExistencia.Descripcion FROM EstadoExistencia 
+                                        RIGHT JOIN Actor ON EstadoExistencia.Actor = Actor.id WHERE EstadoExistencia.id = '".$estado."'");
+                                        $col5.="- $names->Nombre1 - $names->Descripcion<br>\n";                       
+                                }
+                        }
+                }       
+        }        
+        if ($col6=='' OR $col6 == '-') {
+                $col6="Ninguno";
+        } else {
+                $usos=explode('-', $col6);
+                if ($usos!='') {
+                        $col6='';
+                        foreach ($usos AS $uso){
+                                if ($uso!='') {
+                                        $namesa=$db->get_row("SELECT Actor.Nombre1, UsoExistencia.Descripcion FROM UsoExistencia 
+                                        RIGHT JOIN Actor ON UsoExistencia.Actor = Actor.id WHERE UsoExistencia.id = '".$uso."'");
+                                        $col6.="- $namesa->Nombre1 - $namesa->Descripcion<br>\n";                        
+                                }
+                        }
+                }        
+        }
+}
+
+
+function formatrmail($col1,$col2,$col3,$col4,$col5) {// para los permisos de inventario
+	global $db;
+        
+        if ($col4=='' OR $col4 == '-') {
+                $col4="Ninguno";
+        } else {
+                $estados=explode('-', $col4);
+                if ($estados!='') {
+                        $col4='';
+                        foreach ($estados AS $estado){
+                                if ($estado!='') {
+                                        $names=$db->get_row("SELECT Descripcion FROM EstadoExistencia WHERE id = '".$estado."'");
+                                        $col4.="$names->Descripcion<br>\n";                       
+                                }
+                        }
+                }       
+        }        
+        if ($col5=='' OR $col5 == '-') {
+                $col5="Ninguno";
+        } else {
+                $usos=explode('-', $col5);
+                if ($usos!='') {
+                        $col5='';
+                        foreach ($usos AS $uso){
+                                if ($uso!='') {
+                                        $namesa=$db->get_row("SELECT Descripcion FROM UsoExistencia WHERE id = '".$uso."'");
+                                        $col5.="$namesa->Descripcion<br>\n";                        
+                                }
+                        }
+                }        
+        }
+}
+
+/**
+* Tooltip de informacion del Actor para ezresults
+*/
+function formatprovedores($col1,$col2,$col3,$col4,$col5,$col6,$col7,$col8,$col9){
+	global $db, $menu, $linkinfo;
+        
+        $backcol1=$col1;
+
+        $qtysed=$db->get_var("SELECT COUNT(*) FROM Sedes_cliente WHERE Actor = '".$backcol1."'");
+        if ($qtysed == 0) {
+            $col1="<a href='javascript: sedesshow(".$backcol1.")'>Sin Sedes</a>";
+		} else if ($qtysed == 1) {
+            $col1="<a href='javascript: sedesshow(".$backcol1.")'>$qtysed Sede</a>";
+        } else {
+            $col1="<a href='javascript: sedesshow(".$backcol1.")'>$qtysed Sedes</a>";
+        }
+
+        $sql = "SELECT `Nombre1` , `Nombre2`, Tipoidentificacion.Descripcion AS TipoIdentificacion, `NumeroIdentificacion`, `email` , `Telefono` , Fax, Movil, ciudad.nombre, Direccion, Website, Var6, division.nombre AS divnombre, pais.nombre AS paisnombre, Var4 AS Contacto, menu_Cargos.Descripcion AS Cargocontacto
+                FROM `Actor`
+                LEFT JOIN Tipoidentificacion ON Actor.Identificacion = Tipoidentificacion.id
+                LEFT JOIN ciudad ON Actor.Ciudad = ciudad.id
+                LEFT JOIN division ON ciudad.division = division.id
+				LEFT JOIN menu_Cargos ON Actor.Var5 = menu_Cargos.id
+                LEFT JOIN pais ON division.pais = pais.id
+                WHERE Actor.id = '$backcol1'";
+        $info = $db->get_row($sql);
+        
+		if ($linkinfo != '') {
+			$col2="<a href=\"$linkinfo=$backcol1\">".$col2."</a>";
+		} else {
+			$col2="".$col2."";
+		}
+		$col2.="&nbsp;<img align=\"left\" src=\"images/info.gif\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] singleclickstop=[on] cssheader=[sackdata] fixedrelx=[1] fixedrely=[1] header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>";
+        // titulo
+        $col2.="$info->Nombre1";
+        $col2.="] body=[";
+        //contenido
+        $col2.="<table cellspacing='2' border='0'>";
+		
+		$imagepath='images/Actor/'.$backcol1.'';
+		if (file_exists($imagepath)) {  // si existe logo o imagen
+			$dp = opendir($imagepath); // recorro carpeta de XMLs
+            while ($files = readdir($dp)) {
+                $filename = basename($files);
+                if($filename != '.' && $filename != '..') {
+                    $fileexplode = explode ('_', $filename);
+                    if ($fileexplode[0] == 'thumb') {  // solo el archivo thumb
+                        $col2 .= "<tr class='tablemakerowtool'><td colspan=2><div align='center'><img border='0' src='".$imagepath."/".$filename."'></div></td></tr>";
+                    }
+                }
+            }			
+		}	
+
+        $col2.="<tr class='tablemakerowtool'><td><b>"._NOMBRE1."</b></td><td>$info->Nombre1</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._NOMBRE2."</b></td><td>$info->Nombre2</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._TIPOIDEN."</b></td><td>$info->TipoIdentificacion $info->NumeroIdentificacion</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._CONTACTO."</b></td><td>$info->Contacto</td></tr>
+        <tr class='tablemakerowtool'><td><b>Cargo contacto</b></td><td>$info->Cargocontacto</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._TELEFONO."</b></td><td>$info->Telefono</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._FAX."</b></td><td>$info->Fax</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._MOVIL."</b></td><td>$info->Movil</td></tr>
+        <tr class='tablemakerowtool'><td><b>email</b></td><td><a href='mailto:$info->email'>$info->email</a></td></tr>
+        <tr class='tablemakerowtool'><td><b>"._DIRECCION."</b></td><td>$info->Direccion</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._PAIS."</b></td><td>".$info->paisnombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._DIVISION."</b></td><td>".$info->divnombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._CIUDAD."</b></td><td>".$info->nombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._WEBSITE."</b></td><td><a href='http://$info->Website' target='_BLANK'>$info->Website</a></td></tr>
+        <tr class='tablemakerowtool'><td colspan='2'><b>"._NOTAS.":</b><br>$info->Var6</td></tr>
+        </table>";
+        $col2.="]\">";
+      /*  
+        if ($actors=TypeActor($backcol1)) { // si tiene tipos de actor establecidas
+            $col9="<ul>\n";
+            foreach($actors AS $actor){
+                $descip=$db->get_var("SELECT Descripcion FROM Tipoempresa WHERE id = '".$actor."'");
+                $col9.="<li>".utf8_encode($descip)."\n";
+            }
+            $col9.="</ul>\n";
+        }
+	*/
+}
+
+/**
+* Tooltip de informacion del Actor para ezresults
+*/
+function formattool($col1){
+	global $db;
+        
+        $backcol1=$col1;
+                
+        $sql = "SELECT `Nombre1` , `Nombre2`, Tipoidentificacion.Descripcion AS TipoIdentificacion, `NumeroIdentificacion`, `email` , `Telefono` , Fax, Movil, ciudad.nombre, Direccion, Website, Var6, division.nombre AS divnombre, pais.nombre AS paisnombre
+                FROM `Actor`
+                LEFT JOIN Tipoidentificacion ON Actor.Identificacion = Tipoidentificacion.id
+                LEFT JOIN ciudad ON Actor.Ciudad = ciudad.id
+                LEFT JOIN division ON ciudad.division = division.id
+                LEFT JOIN pais ON division.pais = pais.id
+                WHERE Actor.id = '$col1'";
+        $info = $db->get_row($sql);
+        $col1="<img align=\"left\" src=\"images/info.gif\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] cssheader=[sackdata] fixedrelx=[10] fixedrely=[10] header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>";
+        // titulo
+        $col1.="$info->Nombre1";
+        $col1.="] body=[";
+        //contenido
+        $col1.="<table cellspacing='2' border='0'>
+        <tr class='tablemakerowtool'><td><b>"._NOMBRE1."</b></td><td>$info->Nombre1</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._APELLIDO."</b></td><td>$info->Nombre2</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._TIPOIDEN."</b></td><td>$info->TipoIdentificacion $info->NumeroIdentificacion</td></tr>
+        <tr class='tablemakerowtool'><td><b>email</b></td><td><a href='mailto:$info->email'>$info->email</a></td></tr>
+        <tr class='tablemakerowtool'><td><b>"._TELEFONO."</b></td><td>$info->Telefono</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._FAX."</b></td><td>$info->Fax</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._MOVIL."</b></td><td>$info->Movil</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._PAIS."</b></td><td>".$info->paisnombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._DIVISION."</b></td><td>".$info->divnombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._CIUDAD."</b></td><td>".$info->nombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._DIRECCION."</b></td><td>$info->Direccion</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._WEBSITE."</b></td><td><a href='http://$info->Website' target='_BLANK'>$info->Website</a></td></tr>
+        <tr class='tablemakerowtool'><td colspan='2'>-</td></tr>
+        <tr class='tablemakerowtool'><td colspan='2'><b>"._NOTAS.":</b><br>$info->Var6</td></tr>
+        </table>";
+        $col1.="] fade=[on] delay=[500]\">";
+        $col1.="&nbsp;<a href=\"$llink?Action=E&id=$backcol1\">$backcol1</a>";
+
+}
+
+/**
+* Formateo de listado de ajuste de ingreso
+*/
+function formatajuste($col1,$col2,$col3,$col4,$col5,$col6,$col7){
+	global $db;
+
+		$sqm="SELECT Qty FROM Existencia WHERE id = '".$col2."' AND Existe = 1";
+		$cat=$db->get_var($sqm);
+        $bcol5=$col5;
+        if($col7 == 2) {
+			if ($cat > 0) {
+				$col5=$col5."</td><td>$cat</td><td> <input type=\"checkbox\" name=\"nuis[]\" value=\"$col2\"><input type=\"text\" class=\"tablemakeform\" name=\"newcant_$col2\" size=\"5\" value=\"".$cat."\">";
+			} else {
+				$col5=$col5."</td><td>0</td><td> -";
+			}			
+		} else {
+			$col5=$col5."</td><td>$cat</td><td>Serializado";
+			
+		}
+}
+
+
+/**
+* Tooltip de informacion del Actor para ezresults
+*/
+function formatactor($col1,$col2,$col3,$col4,$col5,$col6,$col7,$col8,$col9){
+	global $db;
+        
+        $backcol1=$col1;
+                
+        $sql = "SELECT `Nombre1` , `Nombre2`, Tipoidentificacion.Descripcion AS TipoIdentificacion, `NumeroIdentificacion`, `email` , `Telefono` , Fax, Movil, ciudad.nombre, Direccion, Website, Var6, division.nombre AS divnombre, pais.nombre AS paisnombre
+                FROM `Actor`
+                LEFT JOIN Tipoidentificacion ON Actor.Identificacion = Tipoidentificacion.id
+                LEFT JOIN ciudad ON Actor.Ciudad = ciudad.id
+                LEFT JOIN division ON ciudad.division = division.id
+                LEFT JOIN pais ON division.pais = pais.id
+                WHERE Actor.id = '$col1'";
+        $info = $db->get_row($sql);
+        $col1="<img align=\"left\" src=\"images/info.gif\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] cssheader=[sackdata] fixedrelx=[10] fixedrely=[10] header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>";
+        // titulo
+        $col1.="$info->Nombre1";
+        $col1.="] body=[";
+        //contenido
+        $col1.="<table cellspacing='2' border='0'>
+        <tr class='tablemakerowtool'><td><b>"._NOMBRE1."</b></td><td>$info->Nombre1</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._NOMBRE2."</b></td><td>$info->Nombre2</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._TIPOIDEN."</b></td><td>$info->TipoIdentificacion $info->NumeroIdentificacion</td></tr>
+        <tr class='tablemakerowtool'><td><b>email</b></td><td><a href='mailto:$info->email'>$info->email</a></td></tr>
+        <tr class='tablemakerowtool'><td><b>"._TELEFONO."</b></td><td>$info->Telefono</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._FAX."</b></td><td>$info->Fax</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._MOVIL."</b></td><td>$info->Movil</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._PAIS."</b></td><td>".$info->paisnombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._DIVISION."</b></td><td>".$info->divnombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._CIUDAD."</b></td><td>".$info->nombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._DIRECCION."</b></td><td>$info->Direccion</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._WEBSITE."</b></td><td><a href='http://$info->Website' target='_BLANK'>$info->Website</a></td></tr>
+        <tr class='tablemakerowtool'><td colspan='2'>-</td></tr>
+        <tr class='tablemakerowtool'><td colspan='2'><b>"._NOTAS.":</b><br>$info->Var6</td></tr>
+        </table>";
+        $col1.="] fade=[on] delay=[500]\">";
+        $col1.="&nbsp;<a href=\"$llink?Action=E&id=$backcol1\">$backcol1</a>";
+        
+        if ($actors=TypeActor($backcol1)) { // si tiene tipos de actor establecidas
+            $col9="<ul>\n";
+            foreach($actors AS $actor){
+                $descip=$db->get_var("SELECT Descripcion FROM Tipoempresa WHERE id = '".$actor."'");
+                $col9.="<li>".utf8_encode("$descip")."\n";
+            }
+            $col9.="</ul>\n";
+        }
+}
+
+   
+/**
+* Agrega/Remueve información de Actores, es decir su tipo (provedor, cliente, etc), si no se especifica Acción retorna listado del tipo de actor por el ID
+*
+* @param  int   $id      Id del Actor
+* @param  int  $Type    Tipo a establecer
+* @param  string   $Action   Accion, si es 'ADD' agrega propiedad, si es REMOVE, elimina propiedad, REMOVEALL elomina todos
+*
+*/
+function TypeActor($id, $Type = FALSE, $Action = FALSE){
+    global $db;
+    
+    if ($infoactor=$db->get_row("SELECT Nombre1, TipoActor FROM Actor WHERE id = '".$id."'")) { // valida que el Actor exista
+    
+        $tipos=explode('-', $infoactor->TipoActor);
+        $tipos = array_unique($tipos); // me aseguro de eliminar valores duplicados
+        
+        if (!$Type AND !$Action) { // si type y action son false entonces solo retorna valores mayores de diez
+            foreach ($tipos AS $tipo) {
+                if ($tipo > 9) {
+                    $toreturn[]=$tipo;  //voy cargando array
+                }
+            }
+            return $toreturn;
+        } else if ($Type AND ($Action == 'ADD' OR $Action == 'REMOVE' OR $Action == 'REMOVEALL')) { // si existe algun tipo a establecer
+            if ($Action == 'ADD') { // si es agregar
+                $tipos[]=$Type;
+                $tipos = array_unique($tipos);
+            } else if ($Action == 'REMOVEALL') {
+                $tiipos=$tipos; // backup para remover
+                unset($tipos);
+                foreach ($tiipos AS $tipo) {
+                    if ($tipo < 10) {
+                        $tipos[]=$tipo;  //voy cargando array
+                    }
+                }  
+            } else { //si es remover
+                array_remval($Type, $tipos); // elimino
+            }
+            // armo la linea para el sql
+            $tipoenletras="-";
+            foreach ($tipos AS $tipo) {
+                $tipoenletras.="$tipo-";
+            }
+            //actualizo
+            if ($db->query("UPDATE Actor SET TipoActor = '".$tipoenletras."' WHERE id = '".$id."' LIMIT 1")) {
+                return true;
+            } else {
+                return false;  
+            }            
+        } else {
+            return false;
+        }
+            
+    } else {
+        return false;
+    }    
+}
+
+function maildocumento($iddoc) {
+        global $mailalertas, $db;
+        
+        $documento = new documento();
+        // cargo info del documento
+        $documento->tipodocumento($iddoc);
+        $documento->seleccionadocumento($iddoc);
+        $clasedoc=$documento->getNombreclase();
+        $nombregene=$documento->getGeneraNombre1();
+        $subesrie=$documento->getSubserie();
+        $fecha2=$documento->getFecha();
+        $fecha=date('Y-m-d H:i', $fecha2); 
+
+        $inforecibe1=$documento->getRecibeNombre1();
+        $inforecibe2=$documento->getRecibeNombre2() ;        
+        $inforecibe3=$documento->getRecibeTelefono();
+        $inforecibe5=$documento->getRecibeCiudadNombre();
+        $inforecibe6=$documento->getRecibeDivisionNombre();
+        $emailrecibe=$documento->getRecibeemail();
+        $infogenera1=$documento->getGeneraNombre1() ;
+        $infogenera2=$documento->getGeneraNombre2() ;        
+        $infogenera3=$documento->getGeneraTelefono();
+        $infogenera5=$documento->getGeneraCiudadNombre();
+        $infogenera6=$documento->getGeneraDivisionNombre();
+        $emailgenera=$documento->getGeneraemail();
+        
+
+        $asunto=''.$fecha.' - '.$nombregene.', creado el documento '.$clasedoc.' - # '.$subesrie.'';
+	$mensaje="$asunto<br><br>$infogenera1 $infogenera2 - $infogenera3 <br> $infogenera5 $infogenera6 <br><br><b>Recibe:</b><br>$inforecibe1 $inforecibe2 - $inforecibe3 <br> $inforecibe5 $inforecibe6<br>";
+        
+	$mail= new send_mail();
+	$mail->from($mailalertas);
+	
+	if ($emailsede=$db->get_var("SELECT email FROM Sedes_cliente WHERE id = '".$documento->getSede()."'")) {
+		$mail->recepcc($emailsede);
+	}
+	$mail->recepcc($emailrecibe);
+	$mail->recepcc($emailgenera);
+	
+	$mail->asunto($asunto); 
+	$mail->recep($mailalertas);
+	$mail->mensaje($mensaje);
+	$mail->sendmailnow();			
+	//echo "$asunto<br><br>$mensaje";
+}
+
+function checkprealertas($opcionmenu) {
+        global $db;
+        
+        $html="<br>";
+        
+        switch ($opcionmenu) {   // 
+	
+                case ("facturas");				// En caso de facturas
+                {
+                        $html.="<img align=\"left\" src=\"images/info.gif\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] cssheader=[sackdata] fixedrelx=[10] fixedrely=[10]  header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>";
+                        // titulo
+                        $html.="Factura Proveedor pendiente";
+                        $html.="] body=[";
+                        //contenido
+                        $html.="ASD ASD SAD DSF<br>SDF DFdfgdfg  DSF SdfgdfgDF SAD GFH SDF<BR>SdfgdfgDF SsfdfGFH SDF<BR>SdfgdfgDF rt fdgd fgGFH SDF<BR>Sdfdfgdfg<BR>";
+                        $html.="] fade=[on] delay=[500]\">";
+                        $html.="&nbsp;<a href=\"\">Factura Confecciones coquito pendiete de pago</a>";  
+                        $html.="<br>";
+                        $html.="<img align=\"left\" src=\"images/info.gif\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] cssheader=[sackdata] fixedrelx=[10] fixedrely=[10]  header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>";
+                        // titulo
+                        $html.="Nota credito sin cruzar";
+                        $html.="] body=[";
+                        //contenido
+                        $html.="ASD ASD SAD DSF<br>SDF DFdfgdfg  DSF SdfgdfgDF SAD GFH SDF<BR>SdfgdfgDF SsfdfGFH SDF<BR>SdfgdfgDF rt fdgd fgGFH SDF<BR>Sdfdfgdfg<BR>";
+                        $html.="] fade=[on] delay=[500]\">";
+                        $html.="&nbsp;<a href=\"\">Nota credito sin cruzar</a>";                         
+                        return $html;
+                break;
+                }
+                
+                default; // Default npi
+                {
+                        return FALSE;
+                }
+        }
+}
+
+
+function formatinveta($col1,$col2,$col3,$col4,$col5,$col6,$col7,$col8,$col9,$col10,$col11,$col12,$col13,$col14,$col15,$col16,$col17,$col18) // para inventario
+{
+        global $ffecha,$db;
+        
+        $col12=date($ffecha, $col12);
+		//col7
+		/*
+		$produ = new inventario();
+		$produ->loadproduct($col3);
+		$idActor=$produ->getFabricanteId();
+		$serial1=$col7;
+		$sql="SELECT * FROM ConfigStrike WHERE id = '$idActor'";
+		$valuesStrike=$db->get_row($sql);		
+		if($valuesStrike->estado!=0 and $col7!=""){
+			$sql="SELECT count( Serial1 ) AS Serial1 FROM Existencia WHERE Serial1 = '$serial1'";
+			$cont=$db->get_row($sql);
+			$ca=$valuesStrike->cant_strike;
+			if($cont->Serial1>=$ca){
+				$col7="<b>$col7 * ($cont->Serial1)</b>";				
+			}
+		}
+		*/
+}
+
+function formatclients($col1,$col2,$col3,$col4,$col5,$col6,$col7,$col8,$col9){
+	global $db;
+        
+        $backcol1=$col1;
+                
+        $sql = "SELECT `Nombre1` , `Nombre2`, Tipoidentificacion.Descripcion AS TipoIdentificacion, `NumeroIdentificacion`, `email` , `Telefono` , Fax, Movil, ciudad.nombre, Direccion, Website, Var6, division.nombre AS divnombre, pais.nombre AS paisnombre, Var4 AS Contacto
+                FROM `Actor`
+                LEFT JOIN Tipoidentificacion ON Actor.Identificacion = Tipoidentificacion.id
+                LEFT JOIN ciudad ON Actor.Ciudad = ciudad.id
+                LEFT JOIN division ON ciudad.division = division.id
+                LEFT JOIN pais ON division.pais = pais.id
+                WHERE Actor.id = '$col1'";
+        $info = $db->get_row($sql);
+        $col1="<form action=\"".$_SERVER['PHP_SELF']."\" method=\"POST\"><input type=\"hidden\" name=\"mode\" value=\"info\"><input type=\"hidden\" name=\"Actor\" value=\"".$backcol1."\"><input type=\"submit\" class=\"tablemakebutton\" name=\"ver\" value=\""._SEE."\"></form></td><td>";
+        $col1.="<img align=\"left\" src=\"images/info.gif\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] cssheader=[sackdata] fixedrelx=[10] fixedrely=[10] header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>";
+        // titulo
+        $col1.="$info->Nombre1 - ID $backcol1";
+        $col1.="] body=[";
+        //contenido
+        $col1.="<table cellspacing='2' border='0'>
+        <tr class='tablemakerowtool'><td><b>"._NOMBRE1."</b></td><td>$info->Nombre1</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._NOMBRE2."</b></td><td>$info->Nombre2</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._TIPOIDEN."</b></td><td>$info->TipoIdentificacion $info->NumeroIdentificacion</td></tr>
+        <tr class='tablemakerowtool'><td><b>email</b></td><td><a href='mailto:$info->email'>$info->email</a></td></tr>
+        <tr class='tablemakerowtool'><td><b>"._TELEFONO."</b></td><td>$info->Telefono</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._FAX."</b></td><td>$info->Fax</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._MOVIL."</b></td><td>$info->Movil</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._PAIS."</b></td><td>".$info->paisnombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._DIVISION."</b></td><td>".$info->divnombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._CIUDAD."</b></td><td>".$info->nombre."</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._DIRECCION."</b></td><td>$info->Direccion</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._CONTACTO."</b></td><td>$info->Contacto</td></tr>
+        <tr class='tablemakerowtool'><td><b>"._WEBSITE."</b></td><td><a href='http://$info->Website' target='_BLANK'>$info->Website</a></td></tr>
+        <tr class='tablemakerowtool'><td colspan='2'>-</td></tr>
+        <tr class='tablemakerowtool'><td colspan='2'><b>"._NOTAS.":</b><br>$info->Var6</td></tr>
+        </table>";
+        $col1.="] fade=[on] delay=[500]\">";
+        $col1.="&nbsp;<a href=\"$llink?Action=E&id=$backcol1\">editar</a>";
+        
+        if ($actors=TypeActor($backcol1)) { // si tiene tipos de actor establecidas
+            $col9="<ul>\n";
+            foreach($actors AS $actor){
+                $descip=$db->get_var("SELECT Descripcion FROM Tipoempresa WHERE id = '".$actor."'");
+                $col9.="<li>".$descip."\n";
+            }
+            $col9.="</ul>\n";
+        }
+}
+
+function vehiculos($col1,$col2) // para vehiculos
+{
+        global $ffecha, $ftime, $ahora;
+        $id=$col1;
+        $tiempo=$ahora-$col2;
+        $totaltimein=round(($tiempo/(60*60)),1); // tiempo total
+        $col1="<img src='images/arrowrightmonth.gif' onclick='Salevehiculo(".$id.")'; border='1' title='Registrar salida' onmouseover=this.style.background='white'; onmouseout=this.style.background=''> Activo <b>$totaltimein</b> horas";
+        $col2=date("$ffecha $ftime", $col2);
+
+}
+
+function listaingreso($col1,$col2,$col3,$col4,$col5,$col6,$col7) // para vehiculos
+{
+        global $db;
+
+		$produ = new inventario();
+		$produ->loadproduct($col1);
+		$idActor=$produ->getFabricanteId();
+		$serial1=$col3;
+		$sql="SELECT * FROM ConfigStrike WHERE id = '$idActor'";
+		$valuesStrike=$db->get_row($sql);		
+		if($valuesStrike->estado!=0){
+			$sql="SELECT count( Serial1 ) AS Serial1 FROM Existencia WHERE Serial1 = '$serial1'";
+			$cont=$db->get_row($sql);
+			$ca=$valuesStrike->cant_strike;
+			if($cont->Serial1>=$ca){
+				$col7="<td class='tablemakeheader'>$col7 *";
+				return;
+			}
+		}
+		if($col5!=""){
+			$sql="SELECT count(serial3) as esta FROM authList WHERE id = '$idActor' and serial3='$col5'";
+			$isAuth=$db->get_row($sql);
+			if($isAuth->esta!=1){
+				$col7="<td class=''>$col7 **";
+			} else {
+				$col7="<td>$col7";
+			}
+		} else {
+			$col7="<td>$col7";
+		}
+}
+
+
+function listraslado($col1,$col2,$col3,$col4,$col5,$col6,$col7,$col8,$col9,$col10,$col11,$col12,$col13,$col14) // para listado de traslados
+{
+        global $db;
+
+		$backcol9 = $col9;
+		$backcol10 = $col10;
+		
+		$col9 = "\n<select  class=\"tableforms\" name=\"estado_".$col1."\"><option value=\"\">-</option>\n";
+		$sql = "SELECT id, Descripcion FROM EstadoExistencia WHERE Actor = '".$col11."'";	
+		$inforegistro= $db->get_results($sql);
+		foreach( $inforegistro as $inforeg )
+		{
+			if ($backcol9 == $inforeg->id ) {
+				$col9 .= "<option selected  value=\"$inforeg->id\">$inforeg->Descripcion</option>\n";
+			} else {
+				$col9 .= "<option value=\"$inforeg->id\">$inforeg->Descripcion</option>\n";
+			}
+		}
+		$col9 .= "</select><input type=\"hidden\" name=\"backup_estado_".$col1."\" value=\"".$backcol9."\">";
+		
+		$col10 = "\n<select  class=\"tableforms\" name=\"uso_".$col1."\"><option value=\"\">-</option>\n";
+		$sql = "SELECT id, Descripcion FROM UsoExistencia WHERE Actor = '".$col11."'";	
+		$inforegistro= $db->get_results($sql);
+		foreach( $inforegistro as $inforeg )
+		{
+			if ($backcol10 == $inforeg->id ) {
+				$col10 .= "<option selected  value=\"$inforeg->id\">$inforeg->Descripcion</option>\n";
+			} else {
+				$col10 .= "<option value=\"$inforeg->id\">$inforeg->Descripcion</option>\n";
+			}
+		}
+		$col10 .= "</select><input type=\"hidden\" name=\"backup_uso_".$col1."\" value=\"".$backcol10."\">";		
+}
+
+function vehiculos2($col1,$col2,$col3) // para vehiculos
+{
+        global $ffecha, $ftime, $ahora;
+
+        $tiempo=$col3-$col2;
+        $totaltimein=round(($tiempo/(60*60)),1); // tiempo total
+        $col1="<b>$totaltimein</b> horas";
+        $col2=date("$ffecha $ftime", $col2);
+        $col3=date("$ffecha $ftime", $col3);
+
+}
+
+function fbuscardoc($col1,$col2,$col3,$col4,$col5,$col6,$col7) // para busquea  de documentos
+{ 
+	global $ffecha;
+	$col4=date("$ffecha", $col4);
+}
+
+function formatsku($col1,$col2,$col3,$col4,$col5,$col6,$col7, $col8) // para lsitado de skus
+{ 
+	$col8 = str_replace(' ', '_', $col8);
+}
+
+function fkardex($col1,$col2,$col3,$col4,$col5,$col6,$col7,$col8,$col9, $col10, $col11, $col12, $col13, $col14, $col15) // para busquea  de documentos $col12 es serial1
+{ 
+	global $cuenta, $io, $inout;
+	// col11 es la fechadoc en unix
+    // Documento.Clase =12 OR Documento.Clase =14 OR Documento.Clase =16 OR Documento.Clase =17 OR Documento.Clase =18 )
+          
+     $bcol6=$col6;
+    if ($col9 == 'RElentrada' OR $col9 == 'REversa' OR $col9 == 'RDevolucion' OR $col9 == 'BODTras') {
+    	$cuenta=$cuenta+$col7;
+        $col1="<img src='images/in.gif' border=0>".$col1;
+        $col6="$col6</td><td><font color='green'>".$cuenta."</font>";
+    } else {
+    	$cuenta=$cuenta-$col7;
+        $col1="<img src='images/out.gif' border=0>".$col1;
+        $col6="$col6</td><td><font color='red'>".$cuenta."</font>";
+    }
+    
+    if ($io) {
+    	if ($col9 == 'RElentrada') { // entradas
+    	
+    		$inout["in"]["$col8-$col11"][]="$col3;$col4;$col5;$col7;$col12;$col13;$col14;$col15;$bcol6";
+    	} else if ($col9 == 'RELentrega') { // salidas
+    	
+    		$inout["out"]["$col8-$col11"][]="$col3;$col7;$col4;$col5;$col7;$col12;$col13;$col14;$col15;$bcol6";
+    	
+    	}
+    
+    }
+}
+
+
+
+//-	Desde	Hasta	4CIF	5Ctdor	c_Ctdor20	c_Ctdor40	8Vol	c_vol	10Ubi	c_ubi	12Fijo	c_fijo	14Ope	c_ope_i	c_ope_o	Obs
+function fcobro($col1,$col2,$col3,$col4,$col5,$col6,$col7,$col8,$col9,$col10,$col11,$col12,$col13,$col14,$col15,$col16,$col17) // Cobro
+{
+	global $ffecha;
+	$col2=date("$ffecha", $col2);
+	$col3=date("$ffecha", $col3);
+	$col4="<input type=\"checkbox\" ". (($col4==1)?"Checked":"") . ">";
+	$col5="<input type=\"checkbox\" ". (($col5==1)?"Checked":"") . ">";	
+	$col6=number_format($col6, 0, ',', '.');
+	$col7=number_format($col7, 0, ',', '.');
+	$col8="<input type=\"checkbox\" ". (($col8==1)?"Checked":"") . ">";
+	$col9=number_format($col9, 0, ',', '.');
+	$col10="<input type=\"checkbox\" ". (($col10==1)?"Checked":"") . ">";
+	$col11=number_format($col11, 0, ',', '.');
+	$col12="<input type=\"checkbox\" ". (($col12==1)?"Checked":"") . ">";
+	$col13=number_format($col13, 0, ',', '.');
+	$col14="<input type=\"checkbox\" ". (($col14==1)?"Checked":"") . ">";
+	$col15=number_format($col15, 0, ',', '.');
+	$col16=number_format($col16, 0, ',', '.');
+}
+
+
+/**
+ * function wordCut($sText, $iMaxLength, $sMessage)
+ *
+ * + cuts an wordt after $iMaxLength characters
+ *
+ * @param  string   $sText       the text to cut
+ * @param  integer  $iMaxLength  the text's maximum length
+ * @param  string   $sMessage    piece of text which is added to the cut text, e.g. '...read more'
+ *
+ * @returns string
+ **/    
+function wordCut($sText, $iMaxLength, $sMessage)
+{
+   if (strlen($sText) > $iMaxLength){
+           
+       $sString = wordwrap($sText, ($iMaxLength-strlen($sMessage)), '[cut]', 1);
+       $asExplodedString = explode('[cut]', $sString);
+      
+       $sCutText = $asExplodedString[0];
+      
+       $sReturn = $sCutText.$sMessage;
+   } else {
+       $sReturn = $sText;
+   }
+  
+   return $sReturn;
+}
+
+/*
+* Retorna array con infomacion de un Archivo
+*
+*/
+
+function fm_get_info($file, $change = true) {
+    $textfiles = array('txt', '(s|p)?html?', 'css', 'jse?', 'php[0-9]*', 'pr?l', 'pm', 'cgi', 'inc', 'csv', 'py', 'asp');
+    $imagefiles = array('gif', 'jpe?g', 'png', 'bmp', 'tiff?', 'pict?', 'ico');
+    $archivefiles = array('zip', '(r|t|j)ar', 't?gz', 't?bz2?', 'arj', 'ace', 'lzh', 'lha', 'xxe', 'uue?', 'iso', 'cab', 'r[0-9]+');
+    $exefiles = array('exe', 'com', 'pif', 'bat', 'scr');
+    $acrobatfiles = array('pd(f|x)');
+    $wordfiles = array('do(c|t)', 'do(c|t)html');
+    $excelfiles = array('xl(s|t|w|v)', 'xl(s|t)html', 'slk');
+    
+    $info = false;
+
+    $filename = basename($file);  // saco nombre base
+    if($filename != '.' && $filename != '..') { // si no son los opuntos de la carpeta
+        $info['name'] = $filename;
+        $explodename = explode(".",$filename); 
+        $ext = $explodename[1];
+        $info['onlyname']=$explodename[0];
+        $info['extension'] = $ext;
+        if( $change ) { // si tiene que eliminar espacios y pasar minusculas
+            $info['onlyname'] = str_replace(' ', '_', $info['onlyname']);
+            $info['onlyname'] = strtolower($info['onlyname']);
+        }
+        $info['image'] = is_dir($file) ? 'dir' : '';
+    } else {
+        return false;    
+    }
+    
+    if($info && !$info['image']) {
+      if(fm_is_type($ext, $textfiles)) $info['image'] = 'text';
+      else if(fm_is_type($ext, $imagefiles)) $info['image'] = 'image';
+      else if(fm_is_type($ext, $archivefiles)) $info['image'] = 'archive';
+      else if(fm_is_type($ext, $exefiles)) $info['image'] = 'exe';
+      else if(fm_is_type($ext, $acrobatfiles)) $info['image'] = 'acrobat';
+      else if(fm_is_type($ext, $wordfiles)) $info['image'] = 'word';
+      else if(fm_is_type($ext, $excelfiles)) $info['image'] = 'excel';
+      else $info['image'] = 'file';
+    }
+    return $info;
+}
+
+function fm_is_type($ext, $types) {
+    while(list(,$val) = each($types)) {
+      if(eregi($val, $ext)) return true;
+    }
+    return false;
+}
+
+?>

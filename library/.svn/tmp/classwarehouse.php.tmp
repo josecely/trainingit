@@ -1,0 +1,1248 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2007 Jose Antonio Cely Saidiza
+*  Email jose.celygmail.com
+*  Bogotá Colombia
+****************************************************************************/
+require_once('classinventario.php');
+
+
+
+/**
+* Objeto para manejar exitencias, es una extención de inventario
+* @author Jose Antonio Cely Saidiza <jose.cely@gmail.com>
+* @version 0.01
+* TODO: 
+* - eeeee
+*/
+class warehouse extends inventario {
+        private $formatfecha = "Y-m-d H:i";
+        
+	protected $id_existencia;	// id de la existencia
+        protected $id_producto;	// id del producto
+        protected $ActorExistencia;	// id del producto
+	protected $Serial1;	// Serial1
+	protected $Serial2;	// Serial2
+	protected $Serial3;	// Serial3
+	protected $Serial4;	// Serial4
+	// variable visibles solo para administrador de logistica
+	protected $Serial5;	// Serial5
+	// variable visibles solo para administrador raiz!!!
+	protected $Serial6;	// Serial6
+	
+	protected $Tipo;	// si es 1 es para serializados, 2 por grupos
+	protected $Existe;	// 1 si esta enla bogega, 0 si ya salio
+	
+	protected $NroDecImp;	// NroDecImp
+	protected $NroFactura;	// NroFactura
+	protected $FechaEntrada;	// Fecha Entrada
+	protected $Docentrada;	// Doc de entrada
+	protected $FechaSalida;	// FechaSalida
+	protected $DocSalida;	// Doc de Salida
+	protected $idUsoExistencia;	        // id UsoExistencia
+	protected $UsoExistencia;	        // Descripción UsoExistencia
+	protected $idEstadoExistencia;	// id EstadoExistencia
+	protected $EstadoExistencia;	// Descipcion EstadoExistencia
+	protected $Ubicacion;	// Ubicacion
+	protected $idEstadoSalida;	// id EstadoSalida
+	protected $EstadoSalida;	// Descipcion EstadoSalida
+	protected $Strike;	// Strikes
+	protected $Log;	        // Log
+	protected $Qty;	        // stock de una ubicacion
+        protected $Seguro;      // Segiro de ediciones
+        protected $Sede;      // Sede de Provedor donde se encuentra
+        
+        protected $ListExistences;  // listado de exitencias
+        
+        protected $NombrePropietario;
+        protected $DireccionPropietario;
+        protected $TelefonoPropietario;
+        protected $CiudadPropietario;
+        protected $CaptionSerial4;
+        protected $CaptionSerial1;
+        protected $CaptionSerial2;
+        protected $CaptionSerial3; 
+        protected $CaptionVar;
+
+        protected $Bodegas;
+        protected $Racks;
+        protected $Columnas; 
+        protected $Filas;
+        protected $Pisos;
+        
+        protected $nextNUI;
+		
+        /**
+        * Carga una existencia en memoria
+        * @param    int   $NUI  NUI (codigo barra) de la existencia
+        */              
+	function __construct($NUI = 0){  // inicializo variables del objeto si hay producto
+                global $db;
+                if ($Producto!=0) {
+                        $this->loadexistence($Producto);
+                }                
+                $this->makenextNUI();  // cargo de una vez la siguiente barra
+	} 
+
+        /**
+        * Carga una existencia en base al NUI
+        * @param    int   $NUI  NUI (código barra) de la existencia
+        */
+        function loadexistence($NUI) {
+                global $db, $sesion;
+                
+				// filtro de inventario visible
+				 if ($sesion->IsRoot()) {
+					$visualizacion=1;
+				} else {
+					$PermsEstado=$sesion->get_var('PermsEstado');
+					$PermsUso=$sesion->get_var('PermsUso');
+					$stingestados='';
+					$stingusos='';
+					foreach($PermsEstado AS $dataa) {
+						if ($stingestados=='') {
+							$stingestados.=" Existencia.Estado = '".$dataa."'";
+						} else {
+							$stingestados.=" OR Existencia.Estado = '".$dataa."'";
+						}
+					}
+					foreach($PermsUso AS $dataa) {
+						if ($stingusos=='') {
+							$stingusos.=" Existencia.Uso = '".$dataa."'";
+						} else {
+							$stingusos.=" OR Existencia.Uso = '".$dataa."'";
+						}									
+					}									
+					$visualizacion="(".$stingestados.") AND (".$stingusos.")";
+				}
+				// termina filtro de inventario visible				
+
+                $sql=" SELECT Existencia.id_producto, Existencia.Actor, Existencia.Serial1, Existencia.Serial2, Existencia.Serial3, Existencia.Serial4, Existencia.Serial5, Existencia.Serial6, Existencia.NroDecImp, Existencia.NroFactura, Existencia.FechaEntrada, Existencia.Docentrada, Existencia.FechaSalida, Existencia.DocSalida, Existencia.Uso, UsoExistencia.Descripcion AS DesUso, Existencia.Estado, DesEtado.Descripcion AS DesEtado, Existencia.Ubicacion, Existencia.EstadoSalida, DesEtadoSalida.Descripcion AS DesEtadoSalida, Existencia.Strike, Existencia.Log, Existencia.Qty, Existencia.Seguro, Existencia.Existe, Existencia.Sede
+                FROM `Existencia`
+                LEFT JOIN UsoExistencia ON Existencia.Uso = UsoExistencia.id
+                LEFT JOIN EstadoExistencia AS DesEtado ON Existencia.Estado = DesEtado.id
+                LEFT JOIN EstadoExistencia AS DesEtadoSalida ON Existencia.EstadoSalida = DesEtadoSalida.id
+                WHERE $visualizacion AND Existencia.id = '".$NUI."'";
+				
+                if ($prod = $db->get_row($sql)) {
+                        $this->loadpropietario($prod->Actor);
+                        parent::loadproductbyid($prod->id_producto);    // cargo producto
+                        $this->id_producto=$prod->id_producto;
+                        $this->id_existencia=$NUI;
+                        $this->ActorExistencia=$prod->Actor;
+                        $this->Serial1=$prod->Serial1;
+                        $this->Serial2=$prod->Serial2;
+                        $this->Serial3=$prod->Serial3;
+                        $this->Serial4=$prod->Serial4;
+                        $this->Serial5=$prod->Serial5;
+                        $this->Serial6=$prod->Serial6;
+                        $this->NroFactura=$prod->NroFactura;
+                        $this->NroDecImp=$prod->NroDecImp;
+                        $this->FechaEntrada=$prod->FechaEntrada;
+                        $this->Docentrada=$prod->Docentrada;
+                        $this->FechaSalida=$prod->FechaSalida;
+                        $this->DocSalida=$prod->DocSalida;
+                        $this->idUsoExistencia=$prod->Uso;
+                        $this->UsoExistencia=$prod->DesUso;
+                        $this->idEstadoExistencia=$prod->Estado;
+                        $this->EstadoExistencia=$prod->DesEtado;
+                        $this->Ubicacion=$prod->Ubicacion;
+                        $this->idEstadoSalida=$prod->EstadoSalida;
+                        $this->EstadoSalida=$prod->DesEtadoSalida;
+                        $this->Strike=$prod->Strike;
+                        $this->Seguro=$prod->Seguro;
+                        $this->Qty=$prod->Qty;                        
+                        $this->Existe=$prod->Existe;                        
+                        $this->Sede=$prod->Sede;                        
+                        $this->Log=$prod->Log;
+                        return true;
+				} else {
+					return false;
+				}
+        }
+
+
+        /**
+        * Carga una existencia en base a un codgo de barra
+        * @param    int   $NUI  NUI (código barra) de la existencia
+        */
+        function loadexistencebarcode($Barcode) {
+                global $db;
+                
+                $sql=" SELECT Existencia.id_producto, Existencia.Actor, Existencia.Serial1, Existencia.Serial2, Existencia.Serial3, Existencia.Serial4, Existencia.NroDecImp, Existencia.FechaEntrada, Existencia.Docentrada, Existencia.NroFactura, Existencia.FechaSalida, Existencia.DocSalida, Existencia.Uso, UsoExistencia.Descripcion AS DesUso, Existencia.Estado, DesEtado.Descripcion AS DesEtado, Existencia.Ubicacion, Existencia.EstadoSalida, DesEtadoSalida.Descripcion AS DesEtadoSalida, Existencia.Strike, Existencia.Log, Existencia.Seguro, Existencia.Qty, Existencia.id, Existencia.Existe, Existencia.Sede
+                FROM `Existencia`
+                LEFT JOIN UsoExistencia ON Existencia.Uso = UsoExistencia.id
+                LEFT JOIN Producto ON Existencia.id_producto = Producto.id
+                LEFT JOIN EstadoExistencia AS DesEtado ON Existencia.Estado = DesEtado.id
+                LEFT JOIN EstadoExistencia AS DesEtadoSalida ON Existencia.EstadoSalida = DesEtadoSalida.id
+                WHERE Producto.Codigobarra = '".$Barcode."'";
+                
+                if ($prod = $db->get_row($sql)) {
+                        $this->loadpropietario($prod->Actor);
+                        parent::loadproductbyid($prod->id_producto);    // cargo producto
+                        $this->id_producto=$prod->id_producto;
+                        $this->id_existencia=$prod->id;
+                        $this->ActorExistencia=$prod->Actor;
+                        $this->Serial1=$prod->Serial1;
+                        $this->Serial2=$prod->Serial2;
+                        $this->Serial3=$prod->Serial3;
+                        $this->Serial4=$prod->Serial4;
+                        $this->NroFactura=$prod->NroFactura;						
+                        $this->NroDecImp=$prod->NroDecImp;
+                        $this->FechaEntrada=$prod->FechaEntrada;
+                        $this->Docentrada=$prod->Docentrada;
+                        $this->FechaSalida=$prod->FechaSalida;
+                        $this->DocSalida=$prod->DocSalida;
+                        $this->idUsoExistencia=$prod->Uso;
+                        $this->UsoExistencia=$prod->DesUso;
+                        $this->idEstadoExistencia=$prod->Estado;
+                        $this->EstadoExistencia=$prod->DesEtado;
+                        $this->Ubicacion=$prod->Ubicacion;
+                        $this->idEstadoSalida=$prod->EstadoSalida;
+                        $this->EstadoSalida=$prod->DesEtadoSalida;
+                        $this->Strike=$prod->Strike;
+                        $this->Seguro=$prod->Seguro;  
+                        $this->Existe=$prod->Existe;
+                        $this->Sede=$prod->Sede;                        						
+                        $this->Seguro=$prod->Seguro;
+                        $this->Log=$prod->Log;
+                        $this->Qty=$prod->Qty;
+                        return true;
+				} else {
+					return false;
+				}
+        }
+
+        /**
+        * Carga la info de un propietario de Existencias y sus respectivos captions
+        */
+        function loadpropietario($Propietario) {
+                global $db;
+                
+                $sql = "SELECT `CaptionSerial1` , `CaptionSerial2` , `CaptionSerial3` , `CaptionSerial4` , Actor.Nombre1, Actor.Telefono, Actor.Direccion, ciudad.nombre
+FROM `ActorWarehouse`
+                LEFT JOIN Actor ON ActorWarehouse.id_Actor = Actor.id
+                LEFT JOIN ciudad ON Actor.Ciudad = ciudad.id
+                WHERE ActorWarehouse.id_Actor = '".$Propietario."'";
+		if ($propi = $db->get_row($sql)) {
+			$this->NombrePropietario=$propi->Nombre1;
+                        $this->ActorNombre=$propi->Nombre1;
+			$this->DireccionPropietario=$propi->Direccion;
+			$this->DireccionTelefono=$propi->Telefono;
+                        $this->CiudadPropietario=$propi->nombre;
+			$this->CaptionSerial1=$propi->CaptionSerial1;
+			$this->CaptionSerial2=$propi->CaptionSerial2;
+			$this->CaptionSerial3=$propi->CaptionSerial3;
+			$this->CaptionSerial4=$propi->CaptionSerial4;
+                        return true;
+		} else {
+			return false;
+		}
+        }
+        
+        /**
+        * Muestra una existencia en pantalla
+        */        
+        function showexistence($NUI, $NUI2 = TRUE) {
+                global $db, $sesion;
+                
+                if ($NUI2) {
+ 					if ($this->loadexistence($NUI)){
+				            $varhtm="$this->Nombre - <a href='javascript: showexistence($this->id_existencia)'>$NUI</a>";
+				            $fechaen=date($this->formatfecha, $this->FechaEntrada);
+				            if (count($this->imagesupload)>0) {
+				                    $tumb="".$this->urlimages."/".$this->id."/thumb_".$this->id."_0.".$this->imagesupload[0]."";
+				                    $image="".$this->urlimages."/".$this->id."/normal_".$this->id."_0.".$this->imagesupload[0]."";                                
+				            } else {
+				                    $tumb="".$this->urlimages."/noimage.png";
+				                    $image="".$this->urlimages."/noimage.png";
+				            }                        
+				            $html.="<div class=\"simpletext\"><img align=\"left\" src=\"images/info.gif\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] cssheader=[sackdata] fixedrelx=[10] fixedrely=[10]  header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>"; 
+		                    // titulo tooltip
+		                    $html.="$varhtm";
+		                    $html.="] body=[";
+		                    //contenido tooltip
+		                    $html.="<img align='top' src='$image'><br><b>".$this->CaptionSerial1."</b>: ".$this->Serial1."<br><b>Stock</b> = $this->Stock<BR>";
+		                    $html.="]\">";
+		                    $html.="<b>$NUI</b> - $this->ActorNombre<br>";
+				            $html.="$this->Nombre<br>\n";
+				            $html.="<b>".$this->CaptionSerial1."</b>: ".$this->Serial1."<br>\n";
+				            $html.="<b>Entrada</b>: ".$fechaen."</div>\n";
+				            return $html;
+
+        
+                        } else {
+                              return FALSE;
+                        }
+                } else {
+                    
+                    if ($this->loadexistencebarcode($NUI)){
+                        	// filtros de visualizacion
+                        	$show=false;
+                        	if (!$sesion->IsRoot()){
+								$PermsFabricante=$sesion->get_var('PermsFabricante');
+								if (in_array($this->getFabricanteId(),$PermsFabricante)) {
+									$show=true;
+								}
+							} else {
+								$show=true;
+							}
+                        
+                        	if ($show) {
+                        	                        
+                                $varhtm="$this->Nombre - <a href='javascript: showexistence($this->id_existencia)'>$NUI</a>";
+                                $fechaen=date($this->formatfecha, $this->FechaEntrada);
+                                if (count($this->imagesupload)>0) {
+                                        $tumb="".$this->urlimages."/".$this->id."/thumb_".$this->id."_0.".$this->imagesupload[0]."";
+                                        $image="".$this->urlimages."/".$this->id."/normal_".$this->id."_0.".$this->imagesupload[0]."";                                
+                                } else {
+                                        $tumb="".$this->urlimages."/noimage.png";
+                                        $image="".$this->urlimages."/noimage.png";
+                                }                        
+                                $html.="<div class=\"simpletext\"><img align=\"left\" src=\"images/info.gif\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] cssheader=[sackdata] fixedrelx=[10] fixedrely=[10]  header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>"; 
+		                        // titulo tooltip
+		                        $html.="$varhtm";
+		                        $html.="] body=[";
+		                        //contenido tooltip
+		                        $html.="<img align='top' src='$image'><br><b>".$this->CaptionSerial1."</b>: ".$this->Serial1."<br><b>Stock</b> = $this->Stock<BR>";
+		                        $html.="]\">";
+		                        $html.="<b>$NUI</b> - $this->ActorNombre<br>";
+                                $html.="$this->Nombre<br>\n";
+                                $html.="<b>".$this->CaptionSerial1."</b>: ".$this->Serial1."<br>\n";
+                                $html.="<b>Entrada</b>: ".$fechaen."</div>\n";
+                                return $html;
+                             } else {
+                             	$html="<div class=\"simpletext\">"._CANTSEE."</div>\n";
+                             	return $html;
+                             }                                
+                        } else  {
+                                return FALSE;
+                        }                        
+                }
+        }       
+        
+        /**
+        * Muestra el Tracking de una existencia en pantalla
+        (100, 'Creada existencia'),
+        (101, 'Salida existencia'),
+        (102, 'Nueva Ubicacion establecida'),
+        (103, 'Nuevo Estado establecido'),
+        (104, 'Nuevo Uso establecido'),
+        (105, 'Existencia bloqueada'),
+        (106, 'Existencia desbloqueada'),
+        (107, 'Copia del NUI'),
+        (108, 'Extraidas al NUI'),
+        (109, 'Nuevo Serial1 establecido'),
+        (110, 'Nuevo Serial2 establecido'),
+        (111, 'Nuevo Serial3 establecido'),
+        (112, 'Nuevo Serial4 establecido');
+        */        
+        function showtrackexistence($NUI) {
+                global $db;
+                
+                if ($this->loadexistence($NUI)){
+                        $html="<div class=\"prealerta\">\n";
+                        $tracks=explode('&', $this->Log); // explota los logs
+                        foreach ($tracks AS $track) {
+                                $html.="<li>";
+                                // explode por comas
+                                $infologs=explode(',', $track);
+                                $moreifo='';
+                                if($infologs[1]=='102' OR $infologs[1]=='109' OR $infologs[1]=='110' OR $infologs[1]=='111' OR $infologs[1]=='112'){
+                                        $moreifo="<br>De '<i>$infologs[3]</i>' a '<i>$infologs[4]</i>'\n";
+                                } else if ($infologs[1]=='103'){ // nuevo estado
+                                        $orig=$db->get_var("SELECT Descripcion FROM EstadoExistencia WHERE id = '".$infologs[3]."'");
+                                        $nuevo=$db->get_var("SELECT Descripcion FROM EstadoExistencia WHERE id = '".$infologs[4]."'");
+                                        $moreifo="<br>De '<i>$orig</i>' a '<i>$nuevo</i>'\n";
+                                } else if ($infologs[1]=='104'){ // nuevo uso
+                                        $orig=$db->get_var("SELECT Descripcion FROM UsoExistencia WHERE id = '".$infologs[3]."'");
+                                        $nuevo=$db->get_var("SELECT Descripcion FROM UsoExistencia WHERE id = '".$infologs[4]."'");
+                                        $moreifo="<br>De '<i>$orig</i>' a '<i>$nuevo</i>'\n";                                        
+                                }
+                                $fechalog=date($this->formatfecha, $infologs[0]);
+                                $iddeldoc=$db->get_var("SELECT Subserie FROM Documento WHERE id = '".$infologs[2]."'");
+                                $descriplog=$db->get_var("SELECT Descripcion FROM Codigolog WHERE id = '".$infologs[1]."'");
+                                $html.="$fechalog - <a href=\"documento.php?doc=$infologs[2]&mas=45\" TARGET=\"documento\">doc $iddeldoc</a> - $descriplog $moreifo\n";
+                                
+                                $html.="</li>\n";
+                        }
+                        $html.="</div>\n";
+                        return $html;
+
+                } else  {
+                        return FALSE;
+                }
+        } 
+        
+        /**
+        * Genera el código del Siguiente NUI (Numero Unico de Identificación)
+        */
+        function makenextNUI() {
+                global $db;
+                $id = $db->get_var("SELECT MAX(id) AS max FROM `Existencia`");	// saco el consecutivo
+                $id++;
+                $this->nextNUI=$id;
+        }
+        
+        /**
+        * Retorna TRUE si el XXX es de agrupacion
+        */
+        function isGroup($idprod) {
+                global $db;
+                $sql="SELECT Tipo FROM `Producto` WHERE id = '".$idprod."'";
+                $Grupo = $db->get_var($sql);	// saco el consecutivo
+                if($Grupo == '2') {
+                        return TRUE;
+                } else {
+                        return FALSE;
+                }
+        }
+
+        /**
+        * Cambia de ubicación una existencia
+        */
+	function setPosition($NUI, $newposition, $Documento) {
+                global $db;
+                $actual = $db->get_var("SELECT Ubicacion FROM `Existencia` WHERE id = '".$NUI."'");	// saco valor actual
+                if ($newposition!=$actual) {
+                        $db->query("UPDATE Existencia SET Ubicacion = '".$newposition."' WHERE id = '".$NUI."' LIMIT 1");
+                        $this->putLog($NUI, 102, $Documento, $actual, $newposition); //log               
+                }
+	}
+
+        /**
+        * Cambia serial1 de una existencia
+        */
+	function setSerial1($NUI, $newserial, $Documento) {
+                global $db;
+                $actual = $db->get_var("SELECT Serial1 FROM `Existencia` WHERE id = '".$NUI."'");	// saco valor actual
+                if($newserial!=$actual){
+                        $db->query("UPDATE Existencia SET Serial1 = '".$newserial."' WHERE id = '".$NUI."' LIMIT 1");
+                        $this->putLog($NUI, 109, $Documento, $actual, $newserial); //log              
+                }
+	}
+        
+        /**
+        * Cambia serial2 de una existencia
+        */
+	function setSerial2($NUI, $newserial, $Documento) {
+                global $db;
+                $actual = $db->get_var("SELECT Serial2 FROM `Existencia` WHERE id = '".$NUI."'");	// saco valor actual
+                if($newserial!=$actual){
+                        $db->query("UPDATE Existencia SET Serial2 = '".$newserial."' WHERE id = '".$NUI."' LIMIT 1");
+                        $this->putLog($NUI, 110, $Documento, $actual, $newserial); //log               
+                }
+	}
+        
+        /**
+        * Cambia serial3 una existencia
+        */
+	function setSerial3($NUI, $newserial, $Documento) {
+                global $db;
+                $actual = $db->get_var("SELECT Serial3 FROM `Existencia` WHERE id = '".$NUI."'");	// saco valor actual
+                if($newserial!=$actual){
+                        $db->query("UPDATE Existencia SET Serial3 = '".$newserial."' WHERE id = '".$NUI."' LIMIT 1");
+                        $this->putLog($NUI, 111, $Documento, $actual, $newserial); //log               
+                }
+	}
+
+        /**
+        * Cambia serial4 de una existencia
+        */
+	function setSerial4($NUI, $newserial, $Documento) {
+                global $db;
+                $actual = $db->get_var("SELECT Serial4 FROM `Existencia` WHERE id = '".$NUI."'");	// saco valor actual
+                if($newserial!=$actual){
+                        $db->query("UPDATE Existencia SET Serial4 = '".$newserial."' WHERE id = '".$NUI."' LIMIT 1");
+                        $this->putLog($NUI, 112, $Documento, $actual, $newserial); //log               
+                }
+	}
+
+        /**
+        * Actuliza estado de una exitencia
+        */
+	function setEstado($NUI, $Estado, $Documento) {
+                global $db;
+                $actual = $db->get_var("SELECT Estado FROM `Existencia` WHERE id = '".$NUI."'");	// saco valor actual
+                if($Estado!=$actual){
+                        $db->query("UPDATE Existencia SET Estado = '".$Estado."' WHERE id = '".$NUI."' LIMIT 1");
+                        $this->putLog($NUI, 103, $Documento, $actual, $Estado); //log
+                }
+	}
+        
+        /**
+        * Actualiza codigo de uso de una exitencia
+        */
+	function setUso($NUI, $Uso, $Documento) {
+                global $db;
+                $actual = $db->get_var("SELECT Uso FROM `Existencia` WHERE id = '".$NUI."'");	// saco valor actual
+                if($Uso!=$actual){
+                        $db->query("UPDATE Existencia SET Uso = '".$Uso."' WHERE id = '".$NUI."' LIMIT 1");
+                        $this->putLog($NUI, 104, $Documento, $actual, $Uso); //log
+                }
+	}        
+        /**
+        * Actualiza sede
+        */
+	function setSede($NUI, $Sede, $Documento) {
+                global $db;
+                $actual = $db->get_var("SELECT Sede FROM `Existencia` WHERE id = '".$NUI."'");	// saco valor actual
+                if($Sede!=$actual){
+                        $db->query("UPDATE Existencia SET Sede = '".$Sede."' WHERE id = '".$NUI."' LIMIT 1");
+                        $this->putLog($NUI, 119, $Documento, $actual, $Sede); //log
+                }
+	}
+        
+        /**
+        * Agrega información de log, con el codigo y documento relacionado, y estados o valores cambiados
+        */
+	function putLog($NUI, $codigo, $doc, $original = '', $nuevo = '') {
+                global $db;
+                
+                $logactual=$db->get_var("SELECT Log FROM Existencia WHERE id = '".$NUI."'");
+                $creationlog=time();
+                $more="";
+                if($original!='' OR $nuevo!='') {
+                        $more=",$original,$nuevo";
+                }
+                if ($logactual=='') {
+                        $logactual="$creationlog,$codigo,$doc$more";
+                } else {
+                        $logactual="$logactual"."&$creationlog,$codigo,$doc$more";                        
+                }
+                $sqlexis="UPDATE Existencia SET Log = '$logactual' WHERE id = '".$NUI."'";
+                if ($db->query($sqlexis)){ // si ingresa
+                        return true;
+                } else {
+                        return false;
+                }
+	}
+
+        /**
+        * Pone Seguro o bloqueo de una cantidad de exitencias por ubicacion
+		* Si es un producto agrupado y son menos del total de una vez crea un nuevo NUI para evitar bloqueos
+        */
+	function setSeguro($NUI, $Seguro) {
+		global $db;
+		
+		$cantidadactual=$db->get_var("SELECT (Qty - Seguro) FROM Existencia WHERE  id = '".$NUI."'");
+		if ($cantidadactual < $Seguro) { // si bloquea mas de los que hay error
+				return false;
+		} else {
+				
+				$cantidadactual=$db->get_var("SELECT Qty FROM Existencia WHERE id = '".$NUI."'");
+				if ($cantidadactual  > $Seguro) { // si fracciona de una vez!
+					// copio las existencias nuevas con un nuevo NUI
+					$db->query("INSERT INTO Existencia (id_producto, Actor, Serial1, Serial2, Serial3, Serial4, Serial5, Serial6, NroDecImp, FechaEntrada,  Docentrada, FechaSalida, DocSalida, Uso, Estado, Ubicacion, EstadoSalida, Strike, Qty, Log, Seguro,  Sede, Grupo ) SELECT id_producto, Actor, Serial1, Serial2, Serial3, Serial4, Serial5, Serial6, NroDecImp, FechaEntrada,  Docentrada, FechaSalida, DocSalida, Uso, Estado, Ubicacion, EstadoSalida, Strike, Qty, Log, Seguro,  Sede, Grupo FROM Existencia WHERE id = '".$NUI."'");
+					$NUI2=$db->get_var("SELECT MAX(id) AS max FROM `Existencia`");
+					// la primera la dejo como el valor total
+					$sqlone="UPDATE Existencia SET Qty = ".$Seguro." WHERE id = '$NUI' LIMIT 1";
+					$db->query($sqlone);									
+					// las segunda como el restante
+					$quedannueva=$cantidadactual-$Seguro;
+					$sqlone="UPDATE Existencia SET Qty = ".$quedannueva." WHERE id = '$NUI2' LIMIT 1";					
+					$db->query($sqlone);		
+					echo "Fracción automática - $NUI2";
+				}
+				
+				if ($db->query("UPDATE Existencia SET Seguro = '".$Seguro."' WHERE id = '".$NUI."' LIMIT 1")){ // si actualiza
+						$this->putLog($NUI, 105, $Seguro); //log
+						return true;
+				} else {
+						return false;
+				}
+		}
+	}
+
+        /**
+        * Quita Seguro o bloqueo de una cantidad de exitencias por ubicacio, si force es TRUE no valida y resta a la fuerza
+        */
+	function unsetSeguro($NUI, $Seguro, $force = FALSE) {
+		global $db;
+		if($force) {
+				$sqlexis="UPDATE Existencia SET Seguro = (Seguro - '".$Seguro."') WHERE id = '".$NUI."' LIMIT 1";
+				if ($db->query($sqlexis)){ // si actualiza
+						$this->putLog($NUI, 106, $Seguro); //log
+						return true;
+				} else {
+						return false;
+				}                        
+		} else {
+				$aseguradas=$db->get_var("SELECT Seguro FROM Existencia WHERE id = '".$NUI."'");
+				if ($aseguradas < $Seguro) { // si desbloquea mas de los que hay bloqueados error
+						return false;
+				} else {                
+						$sqlexis="UPDATE Existencia SET Seguro = (Seguro - '".$Seguro."') WHERE id = '".$NUI."' LIMIT 1";
+						if ($db->query($sqlexis)){ // si actualiza
+								$this->putLog($NUI, 106, $Seguro); //log
+								return true;
+						} else {
+								return false;
+						}
+				}
+		}
+	}
+        
+        /**
+        * Crea existencias
+        */
+	function agregaExistencia($id_producto, $Actor, $Serial1, $Serial2, $Serial3, $Serial4, $Serial5, $Dimension, $NroDecImp, $NroFactura, $Docentrada, $Uso, $Estado, $Ubicacion, $qty, $nuipre, $Sede = 0)    {
+                global $db, $sesion;                
+                $PASA=true;
+				if ($qty == '') {
+					$qty=1;
+				}
+                if($nuipre!='') {
+                        $nuiexiste=$db->get_var("SELECT COUNT(*) FROM Existencia WHERE id = '".$nuipre."'"); // valida que ese NUI no exista
+                        if ($nuiexiste){
+                            $PASA=false;
+                        }
+                }
+                
+                if ($PASA) { 
+						$codigobarrin=$db->get_var("SELECT Codigobarra FROM Producto WHERE id = '".$id_producto."'");
+                        if ($this->isAccesory($codigobarrin)) {
+                                if($nuipre!='') {
+                                        $sqlexis="INSERT INTO Existencia (id, id_producto, Actor, Serial1,  Serial2, Serial3, Serial4, Serial5, Dimension, NroDecImp, NroFactura, FechaEntrada, Docentrada, Uso, Estado, Ubicacion, Qty,  Sede, Grupo) VALUES ('$nuipre', '$id_producto', '$Actor', '$Serial1', '$Serial2', '$Serial3', '$Serial4', '$Serial5', '$Dimension', '$NroDecImp', '$NroFactura', UNIX_TIMESTAMP(), '$Docentrada', '$Uso', '$Estado', '$Ubicacion', '$qty',  '$Sede', '".$sesion->get_var('empresa')."')";
+                                        $idcreado=$nuipre;
+                                } else { // si no hay nui cargará el siguiente
+                                        $sqlexis="INSERT INTO Existencia (id_producto, Actor, Serial1,  Serial2, Serial3, Serial4, Serial5, Dimension, NroDecImp, NroFactura, FechaEntrada, Docentrada, Uso, Estado, Ubicacion, Qty,  Sede, Grupo) VALUES ('$id_producto', '$Actor', '$Serial1', '$Serial2', '$Serial3', '$Serial4', '$Serial5', '$Dimension', '$NroDecImp', '$NroFactura', UNIX_TIMESTAMP(), '$Docentrada', '$Uso', '$Estado', '$Ubicacion', '$qty', '$Sede', '".$sesion->get_var('empresa')."')";
+
+                                }
+                                if ($db->query($sqlexis)){ // si ingresa 
+									 if($nuipre=='') {
+                                        $idcreado=$db->get_var("SELECT MAX(id) AS max FROM `Existencia`");     
+									}
+                                        $this->putLog($idcreado, 100, $Docentrada); //log
+                                        return $idcreado;
+                                } else {
+                                        return false;
+                                }
+                        } else { // si no es accesorio
+								if ($nuipre!='' AND $qty > 1) {// si hay un N_UI preliminar pero hay mas de una cantidad error
+									echo "<h2>Error!, Cantidad mayor a uno, no puede especificar NUI</h2>";
+									 return false;
+								}
+								for ($i=0; $i<$qty; $i++) { // clasico for para recorrer las cantidades
+										if($nuipre!='') {
+												$sqlexis="INSERT INTO Existencia (id, id_producto, Actor, Serial1,  Serial2, Serial3, Serial4, Serial5, Dimension, NroDecImp, NroFactura, FechaEntrada, Docentrada, Uso, Estado, Ubicacion, Qty,  Sede, Grupo) VALUES ('$nuipre', '$id_producto', '$Actor', '$Serial1', '$Serial2', '$Serial3', '$Serial4', '$Serial5', '$Dimension', '$NroDecImp', '$NroFactura', UNIX_TIMESTAMP(), '$Docentrada', '$Uso', '$Estado', '$Ubicacion', '1', '$Sede', '".$sesion->get_var('empresa')."')";
+												$idcreado=$nuipre;
+										} else {
+												$sqlexis="INSERT INTO Existencia (id_producto, Actor, Serial1,  Serial2, Serial3, Serial4, Serial5, Dimension, NroDecImp, NroFactura, FechaEntrada, Docentrada, Uso, Estado, Ubicacion, Qty,  Sede, Grupo) VALUES ('$id_producto', '$Actor', '$Serial1', '$Serial2', '$Serial3', '$Serial4', '$Serial5', '$Dimension', '$NroDecImp', '$NroFactura', UNIX_TIMESTAMP(), '$Docentrada', '$Uso', '$Estado', '$Ubicacion', '1',  '$Sede', '".$sesion->get_var('empresa')."')";
+										}
+										if ($db->query($sqlexis)){ // si ingresa 
+												 if($nuipre=='') {
+													$idcreado=$db->get_var("SELECT MAX(id) AS max FROM `Existencia`");     
+												}												// PENDIENTE checkear strikes
+												$this->putLog($idcreado, 100, $Docentrada); //log
+												$this->makenextNUI(); // cargo siguiente nui
+												$idcreados[]=$idcreado;
+										} else {
+												echo "Error creando: $sqlexis<br>";
+										}
+								}                        
+								return $idcreados;             
+							} 
+                } else {
+                        return false;
+                }
+        }
+        
+        /**
+        * Remueve existencias
+        */
+	function remueveExistencia($NUI, $Docsalida, $Estadosalida, $qty) {
+                global $db;				
+                if ($cantidadactual=$db->get_var("SELECT Qty FROM Existencia WHERE  id = '$NUI'")) {					
+                        if (($cantidadactual > 0 ) AND ($cantidadactual > $qty)) { // si son menos cantidades
+                                // copio las existencias nuevas con un nuevo NUI
+
+                                $db->query("INSERT INTO Existencia (id_producto, Actor, Serial1, Serial2, Serial3, Serial4, Serial5, Serial6, NroDecImp, FechaEntrada,  Docentrada, FechaSalida, DocSalida, Uso, Estado, Ubicacion, EstadoSalida, Strike, Qty, Log, Seguro,  Sede, Grupo) SELECT id_producto, Actor, Serial1, Serial2, Serial3, Serial4, Serial5, Serial6, NroDecImp, FechaEntrada,  Docentrada, FechaSalida, DocSalida, Uso, Estado, Ubicacion, EstadoSalida, Strike, Qty, Log, Seguro,  Sede, Grupo FROM Existencia WHERE id = '".$NUI."'");
+                                $NUI2=$db->get_var("SELECT MAX(id) AS max FROM `Existencia`");
+                                // las marco como salidas
+                                $sqlexis="UPDATE Existencia SET FechaSalida = UNIX_TIMESTAMP(), DocSalida = '$Docsalida', Qty = '$qty', EstadoSalida = '$Estadosalida', Existe = 0 WHERE id = '$NUI2' LIMIT 1";
+                                $db->query("UPDATE Existencia SET Qty = (Qty - $qty), Seguro = 0 WHERE id = '$NUI' LIMIT 1");
+                                
+                                $this->putLog($NUI2, 107, $NUI); //log de las nuevas eplicando su herencia
+                                $this->putLog($NUI, 108, $NUI2); //log de la de origen explicando la cantidad extraida
+                               
+                                if ($db->query($sqlexis)){ // si sale
+                                       // parent::stockdown($id_producto, $qty, $bodega); // actualizo stock
+                                        $this->putLog($NUI2, 101, $Docsalida); //log
+                                        $this->makenextNUI(); // cargo siguiente nui
+                                        return $NUI2;
+                                } else {
+                                        return false;
+                                }        
+                                                                
+                        } else if ($cantidadactual < 1 ) {
+                        	// si no hay cantidades
+                        	return false;
+                        } else { // si sale toda la existencia
+                                $sqlexis="UPDATE Existencia SET FechaSalida = UNIX_TIMESTAMP(), DocSalida = '$Docsalida', EstadoSalida = '$Estadosalida', Existe = 0 WHERE id = '$NUI' LIMIT 1";
+                                if ($db->query($sqlexis)){ // si sale
+                                       // parent::stockdown($id_producto, $qty, $bodega); // actualizo stock
+                                        $this->putLog($NUI, 101, $Docsalida); //log
+                                        return $NUI;
+                                } else {
+                                        return false;
+                                }
+                        }
+                } else { // es por que no hay cantidades
+                        return false;
+                }
+	}
+       
+        /**
+        * Fracciona un NUI de producto agrupado
+        */
+	function NUIFraction($NUI,$Qty,$Ubicacion) {
+			global $db;        
+			
+			$items=count($Ubicacion);
+			if($items > 1) {
+				$items--;
+				// la primera la dejo como el primervalor
+				$sqlone="UPDATE Existencia SET Qty = ".$Qty[0].", Ubicacion = '".$Ubicacion[0]."' WHERE id = '$NUI' LIMIT 1";
+				$db->query($sqlone);
+				$creados[]=$NUI;
+				
+				for ($i=1; $i <= $items; $i++) {
+					// copio las existencias nuevas con un nuevo NUI
+					$db->query("INSERT INTO Existencia (id_producto, Actor, Serial1, Serial2, Serial3, Serial4, Serial5, Serial6, NroDecImp, FechaEntrada,  Docentrada, FechaSalida, DocSalida, Uso, Estado, Ubicacion, EstadoSalida, Strike, Qty, Log, Seguro,  Sede, Grupo) SELECT id_producto, Actor, Serial1, Serial2, Serial3, Serial4, Serial5, Serial6, NroDecImp, FechaEntrada,  Docentrada, FechaSalida, DocSalida, Uso, Estado, Ubicacion, EstadoSalida, Strike, Qty, Log, Seguro,  Sede, Grupo FROM Existencia WHERE id = '".$NUI."'");
+					$NUI2=$db->get_var("SELECT MAX(id) AS max FROM `Existencia`");
+					$sqlone="UPDATE Existencia SET Qty = ".$Qty[$i].", Ubicacion = '".$Ubicacion[$i]."' WHERE id = '$NUI' LIMIT 1";
+					$db->query($sqlone);		
+					$creados[]=$NUI2;
+					// las marco como salidas
+					$this->putLog($NUI2, 107, $NUI); //log de las nuevas eplicando su herencia
+					$this->putLog($NUI, 108, $NUI2); //log de la de origen explicando la cantidad extraida
+				}
+				return $creados;
+			} else {
+				echo "error, no se puede fraccionar en uno o cero";
+				return false;
+			}
+	}	
+	
+        /**
+        * Retorna array con cantidad, position y estado
+        */
+	function getListExistences() {
+                global $db;                
+                $sql="SELECT SUM( Existencia.Qty ) AS Qty, `Ubicacion` , EstadoExistencia.Descripcion
+                FROM `Existencia`
+                LEFT JOIN EstadoExistencia ON Existencia.Estado = EstadoExistencia.id
+                WHERE id_producto = '$this->id_producto' AND FechaSalida = '0'
+                GROUP BY `Ubicacion` , Estado";
+                if ($exiten = $db->get_results($sql)) {
+                        foreach ($exiten as $exitencia) {
+                                $this->ListExistences[]="".$exitencia->Qty."||".$exitencia->Ubicacion."||".$exitencia->Descripcion."";
+                        }
+                        return $this->ListExistences;
+                } else {
+                        return false;
+                }
+	}
+
+        /**
+        * Retorna array con mas información de la existencia
+        */
+	function getCaptionVar() {
+                $this->CaptionVar['Codigobarra']=$this->codigobarra;                
+                $this->CaptionVar[$this->CaptionSerial1]=$this->Serial1;
+                $this->CaptionVar[$this->CaptionSerial2]=$this->Serial2;
+                $this->CaptionVar[$this->CaptionSerial3]=$this->Serial3;
+                $this->CaptionVar[$this->CaptionSerial4]=$this->Serial4; 
+                $this->CaptionVar['NroDecImp']=$this->NroDecImp;
+                return $this->CaptionVar;
+	}
+        
+        /**
+        * Carga una array de posiciones y establece maximos y minimos del mapa
+        */
+        function putallpositions($positions, $toshow, $morebodega = FALSE) {
+        /*$this->Bodegas;
+        $this->Racks;
+        $this->Columnas; 
+        $this->Filas;
+        $this->Pisos;  */
+        
+                foreach($positions AS $position) {
+                        if (strlen($position)>3){
+                                
+                                $i=0;
+                                
+                                $vars=str_split($position); // parto la posición
+                                // bodegas
+                                if ($morebodega) {
+                                        $bodegaactual=$vars[$i];
+                                        if($this->Bodegas!='') { // comprueba que bodegas no este vacia
+                                                $nuevo=TRUE;
+                                                foreach($this->Bodegas as $bodegaspasadas){
+                                                        if ($bodegaspasadas==$bodegaactual) {
+                                                                $nuevo=FALSE;
+                                                        }
+                                                }
+                                                if ($nuevo) {
+                                                        $this->Bodegas[]=$bodegaactual; // crea la bodega si no existia previamente
+                                                }
+                                        } else {
+                                                $this->Bodegas[]=$bodegaactual; // si no habia bodega crea la primera
+                                        }
+                                        $i++;
+                                } else {
+                                        $bodegaactual='A';
+                                }
+        
+                                // Rack
+                                $rackactual=$vars[$i];
+                                $more=$i+1;
+                                if(!is_numeric($vars[$more])) { // si no es entero
+                                        $i++;
+                                        $rackactual.=$vars[$i];
+                                }
+                                if($this->Racks[$bodegaactual]!='') { // comprueba que Racks no esten vacios
+                                        $nuevo=TRUE;
+                                        $temp=$this->Racks[$bodegaactual];
+                                        foreach($temp as $Rackspasadas){
+                                                if ($Rackspasadas==$rackactual) {
+                                                        $nuevo=FALSE;
+                                                }
+                                        }
+                                        if ($nuevo) {
+                                                $this->Racks[$bodegaactual][]=$rackactual; // crea el rack si no existia previamente
+                                        }
+                                } else {
+                                        $this->Racks[$bodegaactual][]=$rackactual; // si no habia rack crea el primero
+                                } 
+                                $i++;
+                                
+                                
+                                // Columna
+                                $colactual=$vars[$i];
+                                $more=$i+1;
+                                if(is_numeric($vars[$more])) { // si es entero
+                                        $i++;
+                                        $colactual.=$vars[$i];
+                                }                        
+                                if($this->Columnas[$bodegaactual]!='') { // comprueba que Columnas no esten vacios
+                                        $nuevo=TRUE;
+                                        $temp2=$this->Columnas[$bodegaactual];
+                                        foreach($temp2 as $Columnaspasadas){
+                                                if ($Columnaspasadas==$colactual) {
+                                                        $nuevo=FALSE;
+                                                }
+                                        }
+                                        if ($nuevo) {
+                                                $this->Columnas[$bodegaactual][]=$colactual; // crea el Columnas si no existia previamente
+                                        }
+                                } else {
+                                        $this->Columnas[$bodegaactual][]=$colactual; // si no habia Columnas crea la  primera
+                                }
+                                sort($this->Columnas[$bodegaactual]);
+                                $i++;
+                                
+                                // Filas
+                                $filactual=$vars[$i];
+                                $more=$i+1;
+                                if(!is_numeric($vars[$more])) { // si es entero
+                                        $i++;
+                                        $filactual.=$vars[$i];
+                                }                        
+                                if($this->Filas[$bodegaactual]!='') { // comprueba que filas no esten vacios
+                                        $nuevo=TRUE;
+                                        $temp3=$this->Filas[$bodegaactual];
+                                        foreach($temp3 as $Filaspasadas){
+                                                if ($Filaspasadas==$filactual) {
+                                                        $nuevo=FALSE;
+                                                }
+                                        }
+                                        if ($nuevo) {
+                                                $this->Filas[$bodegaactual][]=$filactual; // crea el filas si no existia previamente
+                                        }
+                                } else {
+                                        $this->Filas[$bodegaactual][]=$filactual; // si no habia filas crea la  primera
+                                }                        
+                        }
+                }                
+                
+                // ahora creo el cubo de la matriz!
+                
+                foreach($toshow AS $position) {            
+                        $i=1;
+                        $vars=str_split($position); // parto la posición
+                        $cantidad=count($vars);
+
+                        $col=$vars[$cantidad-2];
+                        $row=$vars[$cantidad-1];
+                        $matriz[$row][$col]=$position;
+                       // echo "matriz [ $row ] [ $col ]=$position;<br>";
+                }
+                
+                print_r ($this->Bodegas);
+                echo "<br>Racks<br>";
+                print_r ($this->Racks);
+                echo "<br>Columnas<br>";
+                print_r ($this->Columnas);                
+                echo "<br>Filas<br>";
+                print_r ($this->Filas);
+                echo "<br>matriz<br>";
+                print_r ($this->matriz);
+                
+                echo "\n<table border=\"1\" align=\"center\">\n";
+                echo "<tr><td><b>$bodegaactual</b></td>\n";
+                foreach ($this->Filas[$bodegaactual] as $fil) {
+                        echo "<td><b>$fil</b></td>";
+                } 
+                echo "</tr>\n";
+                foreach ($this->Columnas[$bodegaactual] as $coll) {
+                        echo "<tr><td><b>col$coll</b></td>\n";
+                        foreach ($this->Filas[$bodegaactual] as $fil) {
+                                $ifopos="";
+                                if($matriz[$fil][$coll]!='') {
+                                        
+                                        foreach($matriz[$fil][$coll] as $posii) {
+                                                $ifopos.="$posii";
+                                        }
+                                }
+                                echo "<td> - $ifopos </td>";
+                        }                        
+                        echo "</tr>\n";
+                }
+                echo "</table>\n";
+        }
+        
+        /**
+        * Retorna Qty por NUI
+        */
+	function getQtyNUI($NUI) {
+                global $db;
+                
+                if($Qty=$db->get_var("SELECT Qty FROM Existencia WHERE id = '".$NUI."'")) {
+                        return $Qty; 
+                } else {
+                        return false;
+                }
+	} 
+	
+        /**
+        * forza una Qty por NUI, solo si el producto es agrupado o si es serializado y qty es cero regststra salida
+        */
+	function forceQty($NUI, $newqty, $Documento) {
+			global $db, $sesion;
+			$actual = $db->get_row("SELECT Qty, Existencia.Estado, Producto.Codigobarra FROM `Existencia` LEFT JOIN Producto ON Existencia.id_producto = Producto.id WHERE Existencia.id = '".$NUI."'");	// saco valor actual
+			
+			if ($newqty == 0) {
+				$this->remueveExistencia($NUI, $Documento, $actual->Estado, $actual->Qty);
+				return true; 
+			} else if ($this->isAccesory($actual->Codigobarra)) {
+				if($db->query("UPDATE Existencia SET Qty = '".$newqty."' WHERE id = '".$NUI."'")) {
+						$this->putLog($NUI, 120, '', $sesion->GetUserId(), $actual->Qty, $newqty); //log 
+						return true; 
+				}
+			}
+	}
+	
+        /**
+        * Retorna la fecha deel primer ingreso dela existencia
+        */
+	function getCreationdate() {
+                global $db;
+                
+                if($date=$db->get_var( "SELECT MIN( FROM_UNIXTIME( Documento.Fecha, '%Y-%m-%d' ))
+					FROM `Datadocumento`
+					LEFT JOIN Documento ON Datadocumento.id_docgen = Documento.id
+					WHERE Documento.Clase =12
+					AND Datadocumento.id_prod = '".$this->id_producto."'
+					AND Documento.Estado =1 ")) {
+                        return $date; 
+                } else {
+                        return false;
+                }
+	}	
+	
+        /**
+        * Retorna la fecha deb el ultimo pack
+        */
+	function getLastPack() {
+                global $db;
+                
+                if($date=$db->get_var( "SELECT MAX( FROM_UNIXTIME( Documento.Fecha , '%Y-%m-%d') )
+					FROM `Datadocumento`
+					LEFT JOIN Documento ON Datadocumento.id_docgen = Documento.id
+					WHERE Documento.Clase =14
+					AND Datadocumento.id_prod = '".$this->id_producto."'
+					AND Documento.Estado =1 ")) {
+                        return $date; 
+                } else {
+                        return false;
+                }
+	}		
+        /**
+        * Retorna la fecha deb el ultimo ingres0
+        */
+	function getLastIn() {
+                global $db;
+                
+                if($date=$db->get_var( "SELECT MAX( FROM_UNIXTIME( Documento.Fecha , '%Y-%m-%d') )
+					FROM `Datadocumento`
+					LEFT JOIN Documento ON Datadocumento.id_docgen = Documento.id
+					WHERE Documento.Clase =12
+					AND Datadocumento.id_prod = '".$this->id_producto."'
+					AND Documento.Estado =1 ")) {
+                        return $date; 
+                } else {
+                        return false;
+                }
+	}
+		
+	function getStockMonth($inicio, $fin) {
+                global $db;
+                
+                if($qty=$db->get_var( "SELECT SUM( Cantidad )
+					FROM `Datadocumento`
+					LEFT JOIN Documento ON Datadocumento.id_docgen = Documento.id
+					WHERE Documento.Clase =14 AND Documento.Fecha >= '".$inicio."' AND Documento.Fecha <= '".$fin."'  
+					AND Datadocumento.id_prod = '".$this->id_producto."'
+					AND Documento.Estado =1 ")) {
+                        return $qty; 
+                } else {
+                        return false;
+                }
+	}		
+			
+	
+	function FirstDay($dateThis) {
+		// Function for returning the First Day of the Month for the test dateThis value
+		$retVal = NULL;
+		if (is_numeric($dateThis)) {
+			$dateSoM = strtotime(date('Y',$dateThis) . '-' . date('m',$dateThis) . '-01');
+			if (is_numeric($dateSoM)) {
+				$retVal = $dateSoM;
+			}
+		}
+		return $retVal;
+	}
+
+	function LastDay($dateThis) {
+	// Function for returning the Last Day of the Month for the test dateThis value
+		$retVal = NULL;
+		if (is_numeric($dateThis)) {
+			$dateSoM = strtotime(date('Y',$dateThis) . '-' . date('m',$dateThis) . '-01');
+			$dateCog = strtotime('+1 month',$dateSoM);
+			$dateEoM = strtotime('-1 day',$dateCog );
+			if (is_numeric($dateEoM)) {
+				$retVal = $dateEoM;
+			}
+		}
+		return $retVal;
+	}
+	
+        /**
+        * ReActiva por NUI
+        */
+	function ReActiva($NUI) {
+                global $db, $sesion;
+                
+                if($db->query("UPDATE Existencia SET Existe = 1 WHERE id = '".$NUI."'")) {
+						$this->putLog($NUI, 114, '', $sesion->GetUserId()); //log 
+						$Qty = $db->get_var("SELECT Qty FROM Existencia WHERE id = '".$NUI."'");
+						$this->unsetSeguro($NUI, $Qty, true);
+                        return true; 
+                } else {
+                        return false;
+                }
+	}        
+        /**
+        * Retorna Qty libres por NUI
+        */
+	function getQtyfreeNUI($NUI) {
+                global $db;
+                
+                if($Qty=$db->get_var("SELECT (Qty - Seguro) AS Qty2 FROM Existencia WHERE id = '".$NUI."'")) {
+                        return $Qty; 
+                } else {
+                        return false;
+                }
+	}
+        
+        /**
+        * Retorna el id de un producto en base al NUI
+        */
+	function getIbbyNUI($NUI) {
+                global $db;
+                
+                if($id=$db->get_var("SELECT id_producto FROM Existencia WHERE id = '".$NUI."'")) {
+                        return $id; 
+                } else {
+                        return false;
+                }
+	}
+        
+        /**
+        * Retorna la bodega de un producto en base al NUI
+        */
+	function getBodegabyNUI($NUI) {
+                global $db;
+                
+                if($Bodega=$db->get_var("SELECT Bodega FROM Existencia WHERE id = '".$NUI."'")) {
+                        return $Bodega; 
+                } else {
+                        return false;
+                }
+	} 
+
+        /**
+        * Retorna verdadero si existe
+        */
+	function Existe() {
+                return $this->Existe;
+	}
+        /**
+        * Retorna verdadero si existe
+        */
+	function getNroFactura() {
+                return $this->NroFactura;
+	}
+        /**
+        * Retorna verdadero si existe
+        */
+	function getSede() {
+                return $this->Sede;
+	}	
+	
+        /**
+        * Retorna la FechaEntrada
+        */
+	function getFechaEntrada() {
+                return $$this->FechaEntrada;
+	}
+        
+        /**
+        * Retorna el id_exitencia (NUI)
+        */
+	function getid_existencia() {
+                return $$this->id_existencia;
+	}        
+        
+        /**
+        * Retorna la FechaSalida
+        */
+	function getFechaSalida() {
+                return $this->FechaSalida;
+	}        
+        
+        /**
+        * Retora el id de un docuemnto de entrada
+        */
+	function getDocentrada() {
+                return $$this->Docentrada;
+	}
+        
+        /**
+        * Retorna el id del docuento de salida
+        */
+	function getDocSalida() {
+                return $this->DocSalida;
+	}
+                 
+        /**
+        * Retorna el codigo de uso de existencia
+        */
+	function getUsoExistencia() {
+                return $this->UsoExistencia;
+	}
+                 
+        /**
+        * Retorna el estado actual de la existencia
+        */
+	function getEstadoExistencia() {
+                return $this->EstadoExistencia;
+	}
+
+        /**
+        * Retorna el codigo de uso de existencia
+        */
+	function getidUsoExistencia() {
+                return $this->idUsoExistencia;
+	}
+                 
+        /**
+        * Retorna el estado actual de la existencia
+        */
+	function getidEstadoExistencia() {
+                return $this->idEstadoExistencia;
+	}
+          
+        /**
+        * Retorna el estado de salida de la existencia
+        */
+	function getEstadoSalida() {
+                return $this->EstadoSalida;
+	}    	
+              
+        /**
+        * Retorna serial1
+        */
+	function getSerial1() {
+                return $this->Serial1;
+	}    	
+        
+        /**
+        * Retora serial2
+        */
+	function getSerial2() {
+                return $this->Serial2;
+	} 
+        
+        /**
+        * Retora serial3
+        */
+	function getSerial3() {
+                return $this->Serial3;
+	} 
+        
+        /**
+        * Retora serial4
+        */
+	function getSerial4() {
+                return $this->Serial4;
+	}  
+        
+        /**
+        * Retora la cantidad
+        */
+	function getQty() {
+                return $this->Qty;
+	}  
+        
+        /**
+        * Retora la ubicacion
+        */
+        function getUbicacion() {
+                return $this->Ubicacion;
+        }        
+                        
+        /**
+        * Retora el Actor de una existencia
+        */
+        function getActorExistencia() {
+                return $this->ActorExistencia;
+        }        
+}        
+          
+
+?>

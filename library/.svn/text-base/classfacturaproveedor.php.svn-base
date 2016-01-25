@@ -1,0 +1,42 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2007 Jose Antonio Cely Saidiza
+*  Email jose.cely@gmail.com
+*  Bogotá Colombia
+****************************************************************************/
+
+class factura_proveedor extends documento {
+
+	var $classid = 2;	// id del documento
+		
+	function __construct(){		// creo orden de compra
+		parent::__construct($this->classid);
+	}
+	
+	function creardocumento($Grupo,$productos,$Genera,$Recibe,$Ciudad,$total,$proveedor,$fechaentrega){
+		global $db;
+		parent::creardocumento($Grupo,$productos,$Genera,$Recibe,$Ciudad);	// cargo los productos en contenido
+		$sql = "INSERT INTO `Documento` (Grupo, Clase, Subserie, Fecha, Ciudad, Genera, Recibe, Var1, Var3, Var4, Contenido) VALUES ('$this->Grupo', '$this->Clase', '$this->Subserie', '$this->Fecha', '$this->Ciudad', '$this->Genera', '$this->Recibe', '$total', '$proveedor', '$fechaentrega', '$this->Contenido')";
+		$db->query($sql);
+		seleccionadocumento($this->id);
+		return $this->id;		
+	}
+}
+
+
+
+
+
+?>

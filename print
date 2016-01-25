@@ -1,0 +1,10 @@
+#!/bin/sh
+# Para imprimir la factura de venta
+
+PRINTER="$1"
+
+DATALPR="-P$PRINTER $PRINTER.txt"
+
+lpr $DATALPR
+
+exit 0

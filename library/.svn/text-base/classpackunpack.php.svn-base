@@ -1,0 +1,91 @@
+<?php
+/**
+ *  
+ *
+ * @author   Jose Antonio Cely Saidiza
+ * @version   0.01
+ * @copyright GPL v2
+ */
+ 
+class PackUnpack {
+
+		/**
+		* Imprime una unidad de empaque y las hijas tambien, basado en el codigo de Tecsua dagest planning
+		* @return integer
+		*/   
+	function printtask($idtask, $level, $readonly = TRUE) {
+		global $db;
+
+			$data=$db->get_row("SELECT Matrizpackupack.id, `id_parent_packunpack` , UnidadesOrigen.Descripcion, `description`, Hijos, id_doc FROM `Matrizpackupack`
+			LEFT JOIN UnidadesOrigen ON Matrizpackupack.UnidadesOrigen = UnidadesOrigen.id WHERE Matrizpackupack.id = '".$idtask."'");
+			$level++;
+			$images="";
+			if ($level > 0) {
+				for($i = 0; $i < $level; $i++) {
+					$images.="<img src=\"images/arrow_right.gif\" align=\"left\">";
+				}
+			}
+			$html = "<tr class=\"tablemakerow\"><td>".$images." ";
+			if ($data->Hijos) {
+				$html.="<b>".$data->Descripcion."</b></td>";
+			} else {
+				$html.="<i>".$data->Descripcion."</i></td>";
+			}
+			$html.="<td>".$data->description."</td>";
+			if (!$readonly) {
+				$html.="<td><a href=\"".$_SERVER['PHP_SELF']."?id=".$data->id_doc."&disable_idtask=$idtask\" onClick=\"if (!confirm('CONFIRMA ELIMINAR?')) return false;\"><img src=\"images/cross.png\" /></a></td>";
+			}
+			$html.="</tr>";		
+			$sql = "SELECT id FROM `Matrizpackupack` WHERE id_parent_packunpack = ".$idtask."";
+			if ($datas=$db->get_results($sql)) { 					
+				foreach($datas AS $data) { // recorro lsitado de tareas
+					 $html.=$this->printtask($data->id, $level, $readonly);						
+				}
+			}			
+		return $html;
+	}
+
+        /**
+        * Elimina Rama de arbol, basado en el codigo de Tecsua dagest planning
+        * @return int 
+        */   
+	function deletework($workid) {
+		global $db;
+
+		if ($qty = $db->get_var("SELECT COUNT(*) FROM Matrizpackupack WHERE id_parent_packunpack = '".$workid."'")) { // si tiene tareas hijas no la borra
+			echo "<h3>No se puede borrar por que tiene ramas hijas</h3>";
+			return false;				
+		} else {
+			$db->query("DELETE FROM Matrizpackupack WHERE id = '".$workid."' limit 1");
+			return true;
+		}
+	}
+	
+
+        /**
+        * Elimina Rama de arbol, basado en el codigo de Tecsua dagest planning
+        * @return int 
+        */   
+	function printtree($docid, $readonly = TRUE) {
+		global $db;	
+		
+		$sql = "SELECT id FROM `Matrizpackupack` WHERE `id_doc` = '".$docid."' AND id_parent_packunpack = 0";				
+		if ($datas=$db->get_results($sql)) { 
+			echo "<table class=\"tableforms\"><thead><tr class=\"tablemakeheader\"><td>Tipo</td><td>Descripción</td>";
+			if (!$readonly) {
+				echo "<td> -</td>";
+			}
+			echo "</tr></thead><tbody>";
+			$level=0;
+			foreach($datas AS $data) { // recorro lsitado de tareas
+				 $html=$this->printtask($data->id, $level, $readonly);						
+				echo $html; 
+			}
+			echo "</table>";
+		} else {
+			echo "<h3>No se ha cargado ningun tipo de empaque</h3>";
+		}
+	}
+	
+}
+?>

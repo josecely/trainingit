@@ -1,0 +1,250 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2007 Jose Antonio Cely Saidiza
+*  Email jose.cely@gmail.com
+*  Bogotá Colombia
+****************************************************************************/
+/*
+(1, '10 Minutos'),
+(2, '1 Hora'),
+(3, '6 Horas'),
+(4, '8 Horas'),
+(5, '12 Horas'),
+(6, '24 Horas'),
+(7, 'Lunes'),
+(8, 'Martes'),
+(9, 'Miercoles),
+(10,' Jueves'),
+(11, 'Viernes'),
+(12, 'Sabado'),
+(13, 'Domingo'),
+(14,  'Lunes, Miercoles, Viernes'),
+(15, 'Quincenal'),
+(16, 'Mensual');
+*/
+
+/**
+* objeto para Analsis de registos de cron
+* @author Jose Antonio Cely Saidiza <jose.cely@gmail.com>
+* @version 0.01
+* TODO: 
+* - Funciones de depuración
+* - Documentar más a fondo
+*/
+class Cron {
+
+	var $consfraccion = 600; // 10 minutos
+	var $fraccion;
+	var $day;
+	var $daymonth;
+	var $month;
+	var $year;
+	var $minutenumber;
+	var $hournumber;
+	var $is_first = FALSE;
+	var $is_monday = FALSE;
+	var $is_tuesday = FALSE;
+	var $is_wednesday = FALSE;
+	var $is_thursday = FALSE;
+	var $is_friday = FALSE;
+	var $is_saturday = FALSE;
+	var $is_sunday = FALSE;
+	var $is_hour_fraction = FALSE;
+	var $is_six_fraction = FALSE;
+	var $is_eight_fraction = FALSE;
+	var $is_twelve_fraction = FALSE;
+	var $is_first_day_month = FALSE;
+	var $is_fortnight_month = FALSE;
+	
+	function __construct(){
+		global $db, $ahora;
+		$this->day = date('d');
+		$this->daymonth = date('j');
+		$this->month = date('n');
+		$this->year = date('Y');
+		$this->minutenumber = date('i');
+		$this->hournumber = date('H');
+		$this->daynumber = date('w');  // 0 para domingo
+		$inicio=mktime(0, 0, 0, $this->month, $this->day, $this->year);
+		$this->fraccion = round((($ahora - $inicio)/$this->consfraccion),0);
+		
+		// si es el primera fraccion
+		if ($this->fraccion == 1 ) {
+			$this->is_first = TRUE;
+		}
+		
+		switch ($this->daynumber) {
+			case 1:
+				$this->is_monday = TRUE;
+				break;
+			case 2:
+				$this->is_tuesday = TRUE;
+				break;
+			case 3:
+				$this->is_thursday = TRUE;
+				break;
+			case 4:
+				$this->is_wednesday = TRUE;
+				break;
+			case 5:
+				$this->is_friday = TRUE;
+				break;
+			case 6:
+				$this->is_saturday = TRUE;
+				break;
+			case 7:
+				$this->is_sunday = TRUE;
+				break;
+		}
+		
+		
+		if (!($res=$this->fraccion % 6)) {
+			$this->is_hour_fraction = TRUE;
+		}	
+		if (!($res=$this->fraccion % 36)) {
+			$this->is_six_fraction = TRUE;
+		}	
+		if (!($res=$this->fraccion % 48)) {
+			$this->is_eight_fraction = TRUE;
+		}	
+		if (!($res=$this->fraccion % 72)) {
+			$this->is_twelve_fraction = TRUE;
+		}	
+		
+		if ($this->day == 1 AND $this->is_first) {
+			$this->is_first_day_month = TRUE;
+		}	
+		if ($this->day == 15 AND $this->is_first) {
+			$this->is_fortnight_month = TRUE;
+		}			
+		 //echo "Ahora es $ahora, el inicio fueron las $inicio, la fraccion es $this->fraccion - $this->is_six_fraction";
+	}
+
+	function dojobs() {
+		global $db, $ahora, $mailalertas;
+		
+		if($typereports=$db->get_results("SELECT id, Descripcion FROM TypeReport")) {
+			foreach ($typereports AS $typereport) {
+				// recorro los reportes
+				$sql = "SELECT Actor.Nombre1, Actor.id AS Actorid, ReporteMail.email, ReporteMail.Var1, ReporteMail.Var2, Periodicidad  FROM `ReporteMail` LEFT JOIN Actor ON ReporteMail.Actor = Actor.id WHERE Tipo_Reporte = '".$typereport->id."' ORDER BY Actor.id";
+				if ($reports=$db->get_results($sql)) {
+					
+					$subject=" ".$report->Nombre1." - ".$typereport->Descripcion." el ".$this->year."-".$this->month."-".$this->daymonth."-".$this->hournumber ."-".$this->minutenumber ."";				
+					$descripcionsinepsacios=str_replace(" ","_",$typereport->Descripcion);
+					// para tipo de reporte1
+					if ($typereport->id == 1) {
+						
+						$nosehizo=TRUE;
+						foreach ($reports AS $report) {
+							if ($actorsin != $report->Nombre1) { // aca son las banderas para detecar
+								$nosehizo=TRUE;
+							} 
+							$idtipo=$report->Periodicidad;
+							if ($nosehizo) {
+/*								
+(1, '10 Minutos'),
+(2, '1 Hora'),
+(3, '6 Horas'),
+(4, '8 Horas'),
+(5, '12 Horas'),
+(6, '24 Horas'),
+(7, 'Lunes'),
+(8, 'Martes'),
+(9, 'Miercoles),
+(10,' Jueves'),
+(11, 'Viernes'),
+(12, 'Sabado'),
+(13, 'Domingo'),
+(14,  'Lunes, Miercoles, Viernes'),
+(15, 'Quincenal'),
+(16, 'Mensual');
+*/
+								
+								if (($idtipo == 1) OR ($idtipo == 2 AND $this->is_hour_fraction) OR ($idtipo == 3 AND $this->is_six_fraction) OR ($idtipo == 4 AND $this->is_eight_fraction) OR ($idtipo == 5 AND $this->is_twelve_fraction) OR ($idtipo == 6 AND $this->is_first) OR ($idtipo == 7 AND $this->is_monday) OR ($idtipo == 8 AND $this->is_tuesday) OR ($idtipo == 9 AND $this->is_wednesday) OR ($idtipo == 10 AND $this->is_thursday) OR ($idtipo == 11 AND $this->is_friday) OR ($idtipo == 12 AND $this->is_saturday) OR ($idtipo == 13 AND $this->is_sunday) OR ($idtipo == 14 AND ($this->is_friday OR $this->is_wednesday OR $this->is_monday)) OR ($idtipo == 15 AND ($this->is_first_day_month OR $this->is_fortnight_month)) OR ($idtipo == 16 AND $this->is_first_day_month)  ) { // super if
+									
+									$file="".$descripcionsinepsacios."-".$this->year."-".$this->month."-".$this->daymonth."-".$this->hournumber ."-".$this->minutenumber.".csv";
+									$fp = fopen ($file, "wb");	
+									$csvtitle=";NUI ;Fabricante;Codigo;Nombre;Ref.;Descripcion;Serial1;Serial2;Serial3;Serial4;NroDecImp;Fecha Entrada;Fecha Salida;Uso;Estado;Ubicacion;Qty\n";  // encabezados del CSV
+									fwrite ($fp, $csvtitle);	
+									
+									$PermsEstado=$report->Var2;
+									$PermsUso=$report->Var1;
+									$PermsEstado=explode('-',$PermsEstado);
+									$PermsUso=explode('-',$PermsUso);
+									$stingestados='';
+									$stingusos='';
+									foreach($PermsEstado AS $dataa) {
+										if ($stingestados=='') {
+											$stingestados.=" Existencia.Estado = '".$dataa."'";
+										} else {
+											$stingestados.=" OR Existencia.Estado = '".$dataa."'";
+										}
+									}
+									foreach($PermsUso AS $dataa) {
+										if ($stingusos=='') {
+											$stingusos.=" Existencia.Uso = '".$dataa."'";
+										} else {
+											$stingusos.=" OR Existencia.Uso = '".$dataa."'";
+										}									
+									}									
+									$visualizacion="(".$stingestados.") AND (".$stingusos.")";
+											
+									$backsql=" SELECT Existencia.id, Actor.Nombre1, Producto.Codigobarra, Producto.Nombre, Producto.Referencia,  Producto.Descripcion, Existencia.Serial1, Existencia.Serial2, Existencia.Serial3, Existencia.Serial4, Existencia.NroDecImp, Existencia.FechaEntrada AS FechaEntrada, Existencia.Docentrada, UsoExistencia.Descripcion AS DesUso, DesEtado.Descripcion AS DesEtado, Existencia.Ubicacion, Existencia.Seguro, Existencia.Qty, Existencia.Log, Existencia.id,  Existencia.Actor, Existencia.FechaSalida
+									FROM `Existencia`
+									LEFT JOIN UsoExistencia ON Existencia.Uso = UsoExistencia.id
+									LEFT JOIN Actor ON Existencia.Actor = Actor.id
+									LEFT JOIN Producto ON Existencia.id_producto = Producto.id
+									LEFT JOIN EstadoExistencia AS DesEtado ON Existencia.Estado = DesEtado.id
+									LEFT JOIN EstadoExistencia AS DesEtadoSalida ON Existencia.EstadoSalida = DesEtadoSalida.id
+									WHERE ".$visualizacion." AND Actor.id =  ".$report->Actorid." AND Existencia.Existe = 1  ORDER BY Existencia.id ASC"; 	
+									$i=0;
+									if ($contests = $db->get_results($backsql)) { // genero los datos del csv
+										foreach ($contests AS $contest) {		
+											$i++;
+											$sustituye = array("\r\n", "\n\r", "\n", "\r", ",");
+											$contest->Descripcion = str_replace($sustituye, "", $contest->Descripcion);
+											$contest->Nombre = str_replace($sustituye, "", $contest->Nombre);
+											$csvcontent="$i;'$contest->id;'$contest->Nombre1;$contest->Codigobarra;$contest->Nombre;$contest->Referencia;$contest->Descripcion;$contest->Serial1;$contest->Serial2;$contest->Serial3;$contest->Serial4;$contest->NroDecImp;$fechareg;$fechareg2;$contest->DesUso;$contest->DesEtado;$contest->Ubicacion;$contest->Qty\n"; // en el archivo csv
+											fwrite ($fp, $csvcontent);
+										}
+									}
+									fclose($fp);
+									$mail= new send_mail();
+									$mail->from($mailalertas);
+									$mail->asunto($subject); 
+									$mail->recep($report->email);
+									$mail->mensaje($mensaje);
+									$mail->hasatach($file);
+									$nosehizo=FALSE;
+									$mail->sendmailnow();
+									echo "$subject  a ".$report->email." desde ".$mailalertas." con el archivo ".$file."";
+								}
+							}
+						}
+					} else if ($typereport->id == 2) {
+						// por implementar
+						
+					} else if ($typereport->id == 3) {
+						// por implementar
+						
+					}
+				}
+			}
+		} else {
+			return false;
+		}
+	}
+}
+?>

@@ -1,0 +1,307 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2007 Jose Antonio Cely Saidiza
+*  Email jose.cely@gmail.com
+*  Bogotá Colombia
+****************************************************************************/
+
+/*
+Vars content
+
+  `id` int(11)
+  `Clase` tinyint(4) = 12
+  `Grupo` smallint(6)
+  `Subserie` int(11)
+  `Fecha` int(11) -> Fecha Relacion
+  `Genera` smallint(6) -> id generador del documento
+  `Recibe` smallint(6) -> id recibe el documento
+  `Impresiones` smallint(6)
+  `BloqImpresion` binary(1)
+  `Bloqueado` binary(1)
+  `Var0` tinyint(4)
+  `Var1` double  -> elaboro
+  `Var2` double
+  `Var3` varchar(10) -> Total partes
+  `Var4` varchar(100) -> NumeroPickList
+  `Var5` varchar(255) -> Notas
+  `Var6` text
+  `Var7` int(11) -> Recibio
+  `Contenido` text -> contenido de la forma "cantidad,idproducto,precioventa" ...
+  `Ultimaimpresion` int(11) default NULL,
+  `Ultimaedicion` int(11) default NULL,
+  `Estado` tinyint(4) NOT NULL default '1',
+
+*/
+class doc_relacion_entrega extends documento {
+
+	private $classid = 14;	// id del documento
+		
+	function __construct(){		// creo relacion entrega
+		parent::__construct($this->classid);
+	}
+
+
+	public function seleccionadocumento($id){		// cargo relacion entrega
+		if (parent::seleccionadocumento($id)) {
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+	
+	
+	public function imprimirhtml($aumenta = TRUE){		// imprimo relacion entrega 
+                global $db;
+                
+		if (parent::imprimirhtml($aumenta)) {
+			// contenido
+			
+			if ($this->Var2 == 1 OR $this->Var2 == '' OR $this->Var2 == '0') {
+				$tittle="Sin reversa";
+			} else if ($this->Var2 == 2) {
+				$tittle="Con reversa";
+			} else if ($this->Var2 == 3) {
+				$tittle="Para  prestamo";
+			} else if ($this->Var2 == 4) {
+				$tittle="Traslado de Inventario";
+			}		
+			echo "\n<table align=\"center\" class=\"".$this->styletable."\">\n"; // encabezado tabla"
+                        $moreinfo="";
+                        $datamorepack=explode(',', $this->Var4 );
+                        if ($datamorepack[1]!='') { // si hay datos de remision
+                                $moreinfo=$db->get_var("SELECT Nombre1 FROM Actor WHERE id = '".$datamorepack[1]."'"); 
+                                $moreinfo.="<br># ".$datamorepack[2];
+                                if ($datamorepack[3]!='') {
+                                        $moreinfo.="<br># ".$datamorepack[3];
+                                }
+                        }
+			$tdborder=$this->styleborder;
+			echo "<tr class=\"$this->stylecontent\">";
+			echo "<td colspan=\"7\" class=\"$tdborder\">Cliente: ";
+			if ($this->Sede > 0) {
+					$Destinoo2=$db->get_row("SELECT  Actor.Nombre1, Nombre_sede, Direccion_sede, ciudad.nombre AS CiudadNombre, division.nombre AS divisioname FROM `Sedes_cliente` LEFT JOIN ciudad ON Sedes_cliente.Ciudad = ciudad.id LEFT JOIN division ON ciudad.division = division.id LEFT JOIN Actor ON Sedes_cliente.Actor = Actor.id WHERE Sedes_cliente.id = '".$this->Sede."'");				
+				echo "<b>$Destinoo2->Nombre1 - $Destinoo2->Nombre_sede</b></b><br>
+                        Tel: <b>$Destinoo2->Telefono_Contacto_1</b><br>
+                        Dirección: <b>$Destinoo2->Direccion_sede - $Destinoo2->CiudadNombre / $Destinoo2->divisioname </b><br>";
+			} else {
+				echo "<b>$this->Recibe</b>: <b>$this->RecibeNombre1 $this->RecibeNombre2</b> - $this->RecibeTipoidentificacion <b>$this->RecibeNumeroIdentificacion</b><br>
+                        Tel: <b>$this->RecibeTelefono</b><br>
+                        Dirección: <b>$this->RecibeDireccion - $this->RecibeCiudadNombre / $this->RecibeDivisionNombre </b><br>";
+			}
+			echo "<b>$tittle</b>
+						</td>";
+			echo "<td><div valign=\"top\"><small>NPL: $datamorepack[0]<br>$moreinfo </small></div></td>";
+			echo "</tr>\n"; 
+			echo "<tr class=\"$this->stylecontent\">";
+			echo "<td class=\"$tdborder\"><div class=\"$this->titlessmall\">NUI</div></td>";
+			echo "<td class=\"$tdborder\"><div class=\"$this->titlessmall\">Descripcion</div></td>";
+			echo "<td class=\"$tdborder\"><div class=\"$this->titlessmall\">Cant.</div></td>";
+			echo "<td class=\"$tdborder\" width=\"15%\"><div class=\"$this->titlessmall\">Ubicacion</div></td>";
+			echo "<td class=\"$tdborder\" width=\"25%\"><div class=\"$this->titlessmall\">Serial</div></td>";                        
+			echo "<td class=\"$tdborder\"><div class=\"$this->titlessmall\">Estado</div></td>";
+			echo "<td class=\"$tdborder\"><div class=\"$this->titlessmall\">Uso</div></td>";
+			echo "<td class=\"$tdborder\"><div class=\"$this->titlessmall\">NroServicio</div></td>";
+			echo "</tr>\n";
+                        
+         
+                if ($xml = simplexml_load_string($this->Contenido)) {
+                        foreach ($xml->item as $item) {
+                                echo "<tr class=\"$this->stylecontent\">";
+                                if ($this->Var2 == 2) { // si es reversa
+									$serial=$db->get_var("SELECT Var1 FROM Datadocumento WHERE id_docgen = '".$this->id."' AND NUI = '".$item->NUI."'");
+									$more="<br>Reversa: <b>$serial</b>";
+								} else {
+									$more="";
+								}
+								
+                                $Estadio=$db->get_var("SELECT Descripcion FROM EstadoExistencia WHERE id = '".$item->Estado."'");
+                                $Usoo=$db->get_var("SELECT Descripcion FROM UsoExistencia WHERE id = '".$item->Uso."'");
+                                if (!$Seriall=$db->get_var("SELECT Serial1 FROM Existencia WHERE id = '".$item->NUI."'")) {
+                                        $Seriall='-';
+                                }
+                                echo "<td><div align=\"left\">$item->NUI</div></td>";
+                                echo "<td><div align=\"left\">$item->Codigobarra - $item->Nombre</div></td>";
+                                echo "<td><div align=\"left\">$item->Cantidad</div></td>";
+                                echo "<td><div align=\"left\">$item->Ubicacion</div></td>";
+                                echo "<td><div align=\"left\">$Seriall $more</div></td>"; // ojo al serial
+                                
+                                echo "<td><div align=\"right\">$Estadio</div></td>";
+                                echo "<td><div align=\"right\">$Usoo</div></td>";
+                                echo "<td><div align=\"right\">$item->Servicio</div></td>"; // ojo al numero de servicio
+                                echo "</tr>\n";				
+                        }
+                } else {
+                        echo "<b><font color=\"red\">Error cargando XML!</font></b>";
+                }                        
+                        
+			echo "<tr class=\"$this->stylecontent\">";
+			echo "<td colspan=\"6\"></td>";
+			echo "<td class=\"$tdborder\"><div class=\"$this->titlessmall\">Cantidad total</div></td>";
+			echo "<td colspan=\"2\" class=\"$tdborder\"><div class=\"$this->titlessmall\">$this->Var3</div></td>";
+			echo "</tr>\n";
+			echo "<tr class=\"$this->stylecontent\">";
+			echo "<td colspan=\"8\"><div align=\"left\"><b>Notas:</b><br>$this->Var5</div></td>";
+			echo "</tr>\n";                        
+			echo "</table>\n";
+			// Cierre del doc en html
+                        $elaboro=$db->get_row("SELECT Nombre1, Nombre2 FROM Actor WHERE id = '".$this->Var1."'");
+			echo "\n<table class=\"".$this->styletable."\">\n"; // encabezado tabla
+			echo "<tr class=\"$this->stylefoother\">";
+			echo "<td class=\"$tdborder\"><b>REALIZO:</b> $elaboro->Nombre1 $elaboro->Nombre2</td>";
+			echo "</tr>\n";
+			echo "</table>\n";
+			if ($this->PieSmall!='') {
+				echo "<table class=\"".$this->styletable."\">\n"; 
+				echo "<tr class=\"$this->stylefoother\">";
+				echo "$this->PieSmall";
+				echo "</tr>\n";
+			}	
+			echo "</table>\n";
+			if ($this->Estadisticas) {
+				echo "";
+			}
+			// poner siempre este div a lcerrar el documento
+			echo "</div>\n";		
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+
+
+	public function imprimirpdf($aumenta = TRUE, $envia = TRUE){		// cargo factura
+		global $db;
+		if (parent::imprimirpdf($aumenta)) {
+			
+			if ($this->Var2 == 1 OR $this->Var2 == '' OR $this->Var2 == '0') {
+				$tittle="Sin reversa";
+			} else if ($this->Var2 == 2) {
+				$tittle="Con reversa";
+			} else if ($this->Var2 == 3) {
+				$tittle="Para  prestamo";
+			}					
+			$moreinfo="";
+			$datamorepack=explode(',', $this->Var4 );
+			if ($datamorepack[1]!='') { // si hay datos de remision
+					$moreinfo=$db->get_var("SELECT Nombre1 FROM Actor WHERE id = '".$datamorepack[1]."'"); 
+					$moreinfo.=" # ".$datamorepack[2];
+					if ($datamorepack[3]!='') {
+							$moreinfo.=" ".$datamorepack[3];
+					}
+			}
+			
+			// contenido
+			$this->pdf->Ln(); //salto de linea
+			$this->pdf->SetFillColor(230,230,230); // relleno gris
+			$this->pdf->Cell(0,25,'',1,1,'', 1); // celda de la informacion de pick
+			$cliente="Cliente: $this->Recibe: $this->RecibeNombre1 $this->RecibeNombre2 - $this->RecibeTipoidentificacion $this->RecibeNumeroIdentificacion
+Tel: $this->RecibeTelefono
+Direccion: $this->RecibeDireccion - $this->RecibeCiudadNombre / $this->RecibeDivisionNombre
+$tittle";
+			$cliente2="NPL: $datamorepack[0] - $moreinfo";
+			$this->pdf->SetXY(10, 48);
+			$this->pdf->Write(5, $cliente);
+			// para el NPL
+			$this->pdf->Ln();
+			$this->pdf->Write(5, $cliente2);
+		
+			$this->pdf->SetXY(10, 71);
+		
+			$this->pdf->Ln(); //salto de linea
+			
+			$this->pdf->SetFont('Arial','B',10);
+			// ancho de las columnas 196mm es el ancho total
+			$w=array(15,40,10,20,50,18,18,25);
+			// titulos
+			$header=array('NUI','Descripcion','Cant.','Ubicacion','Serial','Estado','Uso','NroServicio');
+			for($i=0;$i<count($header);$i++){
+				$this->pdf->Cell($w[$i],7,$header[$i],1,0,'C',1);
+			}
+			$this->pdf->Ln(8);
+			$this->pdf->SetFont('Arial','',8);		
+			//items			
+			if ($xml = simplexml_load_string($this->Contenido)) {
+                foreach ($xml->item as $item) {
+					if ($this->Var2 == 2) { // si es reversa
+						$serial=$db->get_var("SELECT Var1 FROM Datadocumento WHERE id_docgen = '".$this->id."' AND NUI = '".$item->NUI."'");
+						$more="Reversa: $serial";
+					} else {
+						$more="";
+					}
+					$Estadio=$db->get_var("SELECT Descripcion FROM EstadoExistencia WHERE id = '".$item->Estado."'");
+					$Usoo=$db->get_var("SELECT Descripcion FROM UsoExistencia WHERE id = '".$item->Uso."'");
+					if (!$Seriall=$db->get_var("SELECT Serial1 FROM Existencia WHERE id = '".$item->NUI."'")) {
+							$Seriall='-';
+					}
+
+				$header=array($item->NUI,$item->Codigobarra,$item->Cantidad,$item->Ubicacion,''.$Seriall.' '.$more.'',$Estadio,$Usoo,$item->Servicio);
+				for($i=0;$i<count($header);$i++){
+					$this->pdf->Cell($w[$i],7,$header[$i],0,0,'L',1);
+				}
+				$this->pdf->Ln();
+				}
+			}
+			$this->pdf->SetFont('Arial','B',8);
+			$header=array('','','','','','','Cant. Total',$this->Var3);
+			for($i=0;$i<count($header);$i++){
+				$this->pdf->Cell($w[$i],7,$header[$i],0,0,'C',1);
+			}
+			$this->pdf->Ln();
+			$this->pdf->Cell(0,5,'Notas: '.$this->Var5.'',1,1,'', 1); // celda de la informacion de pick
+			$this->pdf->SetFillColor(252,239,128); // relleno amarillo
+			$this->pdf->Ln();
+			$elaboro=$db->get_row("SELECT Nombre1, Nombre2 FROM Actor WHERE id = '".$this->Var1."'");			
+			$this->pdf->Cell(0,5,'REALIZO: '.$elaboro->Nombre1.' '.$elaboro->Nombre2.'',1,1,'C', 1); // celda de la informacion deelaboro
+			$this->pdf->Ln();			
+			$this->pdf->Cell(95,30,'',1,0,'',1);
+			$this->pdf->Cell(6,30,'','LR',0,'',1);		
+			$this->pdf->Cell(95,30,'',1,0,'',1);
+			$this->pdf->SetX(0);
+			$this->pdf->Ln(2.5);							
+			$this->pdf->Cell(95,0,'Entrego: (Nombre)',0,0,'C');
+			$this->pdf->Cell(6,0,'',0,0,'C');		
+			$this->pdf->Cell(95,0,'Recibio: (Nombre y Sello)',0,0,'C');	
+			if ($envia) {
+				$this->pdf->Output('Packing_'.$this->Subserie.'.pdf','D');		
+			} else {
+				$this->pdf->Output('Packing_'.$this->Subserie.'.pdf','F');						
+			}
+			
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+				
+	public function creardocumento($Grupo,$productos,$Genera,$Recibe,$Ciudad,$totalpartes,$elaboro,$notas,$NumeroPickList, $codetype, $sede){
+		global $db, $sesion;
+		if (parent::creardocumento($sesion->get_var('empresa'),$productos,$Genera,$Recibe,$Ciudad))  {	// cargo los productos en contenido
+                        $sql = "INSERT INTO `Documento` (Grupo, Clase, Subserie, Fecha, Ciudad, Genera, Recibe, Var1, Var2, Var3, Var4, Var5, Var7, Contenido, Sede) VALUES ('$this->Grupo', '$this->Clase', '$this->Subserie', '$this->Fecha', '$this->Ciudad', '$this->Genera', '$this->Recibe', '$elaboro', '$codetype', '$totalpartes', '$NumeroPickList', '$notas', '$recibio', '$this->Contenido',  '$sede')";
+                        if ($db->query($sql)) {
+                                if (parent::seleccionadocumento($this->id)) {
+                                        return $this->id;
+                                } else {
+                                        return FALSE;
+                                }
+                        } else {
+                                return FALSE;
+                        }
+                } else {
+                        return FALSE;
+                }
+	}
+}
+
+?>

@@ -1,0 +1,3160 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2009 Jose Antonio Cely Saidiza
+*  Email jose.cely@gmail.com
+*  Bogotá Colombia
+****************************************************************************/
+
+
+
+/**
+* objeto para creación de formularios, por default arma un formulario en base a una tabla MySQL o XML
+* Puede funcionar sin tabla especificando campos virtuales. OJO, depende de ezsql!
+* Ejemplo de uso básicos:
+* <code>
+* $formlinea = new makeform('Linea', 'makeform');
+* $formlinea->setselect('id_empresa,Empresa,id_empresa,Nombre'); // menu con la tabla linea
+* $formlinea->makejavascript();
+* $formlinea->showform();
+* </code>
+* @author Jose Antonio Cely Saidiza <jose.cely@gmail.com>
+* @version 0.99
+* TODO: 
+* - Funciones de depuración
+* - Documentar más a fondo
+*/
+class makeform {
+
+	protected $table;
+	protected $selects;
+	protected $selectsfilter;
+	protected $multiples;
+	protected $hiddencamp;
+	protected $hiddenform;
+	protected $moreinfo;
+	protected $defaultvalue;
+	protected $dynamiclist;		
+	protected $depselectr;
+	protected $depselectv;
+	protected $reqselect;
+	protected $radios;
+	protected $checkboxs;
+    protected $guidance;
+    protected $idxml;
+	protected $endl;
+
+	protected $primarykey;
+	protected $primarykeyauto;	
+	protected $readonly;	 	
+	protected $nombres;
+	protected $variable;
+	protected $tamanovariable; 
+	protected $nulo; 
+	protected $default;
+	protected $nocampos;
+	protected $newname;
+	protected $javscript = NULL;
+	protected $orderselect;    
+	protected $fileform;
+	protected $bigtitle;
+	protected $showashtml;
+	protected $showashtmlblock;
+    protected $firstvalueselect;
+    protected $submiteds;
+    protected $activesubmited;
+	
+    protected $itemsarrayname;
+    protected $itemsarraycamps;
+    protected $itemsarraytitle;    
+    protected $itemsarraymore;    
+    protected $defaultvaluetab;
+	
+    protected $autocomplete = false;
+	protected $formname = 'form';
+	protected $formid = 'form';
+	protected $title = 'FOMULARIO';
+	protected $infoboton;
+	protected $columns = 1;
+	protected $namebutton = 'Agregar';
+	protected $styletable = 'tablemakeform';
+	protected $stylefoother = 'tablemakefoother';
+	protected $styleheader = 'tablemakeheader';
+	protected $stylerow = 'tablemakerow';
+	protected $stylebutton = 'tablemakebutton';
+	protected $styleforms = 'tableforms';
+	protected $styleformsubmited = 'tableformsubmited';
+	protected $scriptajax = 'ajax.php';
+	protected $commentsafter;
+    protected $keyinfo = 'Llave primaria, autoincrementable';
+    protected $wordcut=40;
+    protected $lang='es';
+	protected $commentsbefore;
+	protected $images = TRUE;    
+    protected $imageform = 'formimage.gif';
+    protected $imageformajax = 'ajax_waiting.gif';
+    protected $idimageform = 'imageform';
+    protected $textselected = 'Seleccione';
+	protected $valuestd = '&|&';
+	protected $valuestr = '#|#';
+	protected $close = TRUE;
+	protected $submit = TRUE;
+	protected $open = TRUE;
+	protected $debug = FALSE;
+    protected $stylesubmited = FALSE;
+    protected $pathwysiwyg ="library/wysiwyg/wysiwyg.js";
+    protected $yawysiwyg = FALSE;
+    protected $setslider;
+    protected $formulas;
+	protected $whataction;
+
+    protected $printjavascript=FALSE;	
+    
+    /* mensajes */
+    public $msgnonull = 'No puede ser vacio';
+    public $msgnoint = 'Tiene que introducir un número entero en';
+    public $msgnofloat = 'Tiene que introducir un número/flotante entero en';
+    public $msgnomail = 'Dirección de e-mail inválida';
+	
+	/**
+        * Inicializa formulario, si no se especifica tabla se asume una tabla con un campo llamado 'id', tipo small int
+        * @param    string  $table Nombre de la tabla, Si contiene el Texto 'xml' se configurará como modo XML
+        * @param    strin   $file contenido XML
+        */
+	function __construct($table, $XMLCONTENT = false){
+        global $db;
+		
+        if($table!='' AND $table!= 'xml') {
+
+			$infotable = $db->get_results("describe $table");
+			$i=0;
+			foreach ($infotable as $datatable) {		// aca creo los arrays de caracteristicas
+				$this->nombres[$i] = $datatable->Field;
+				
+				$nombrecampo = explode('(', $datatable->Type);		//  parto el nombre de variable por los parentesis
+				$this->variable[$i] = $nombrecampo[0];
+				$tamanovar = explode(')', $nombrecampo[1]);
+				$this->tamanovariable[$i] = $tamanovar[0];
+				$this->nulo[$i] = $datatable->Null;
+				if ($datatable->Key=='PRI') {	// aca marco la llave primaria
+					$this->primarykey = $datatable->Field; 
+				}
+				
+				if ($datatable->Key=='PRI' AND $datatable->Extra=='auto_increment') {	// aca marco los campos autoincrement como read only
+					$this->readonly[] = $datatable->Field;
+					$this->primarykeyauto = $datatable->Field; 
+				}
+				$this->default[$i] = $datatable->Default;
+				$i++;
+			}
+			$this->nocampos=$i;
+			
+		} else if ($table == 'xml') {
+            $this->table='xml';
+
+            $i=0;
+            if ($xml = simplexml_load_string($XMLCONTENT)) {
+                // datos
+                foreach ($xml->data AS $data) {
+                    foreach ($data->variable as $datos) {		// aca creo los arrays de caracteristicas
+                        $this->idxml[$i]="$datos->id"; // los id de xml pueden ser diferentes al consecutivo de la libreria
+                        $this->nombres[$i] = "$datos->name";
+                        $this->variable[$i] = "$datos->type";
+                        $this->tamanovariable[$i] = "$datos->size";
+    
+                        if ($datos->nulo == '1') {
+                            $this->nulo[$i] = 'YES';
+                        } else {
+                            $this->nulo[$i] = ''; 
+                        }
+                        /*    $this->primarykey = $datatable->Field; 
+                        if ($datatable->Key=='PRI' AND $datatable->Extra=='auto_increment') {	// aca marco los campos autoincrement como read only
+                            $this->readonly[] = $datatable->Field;
+                            $this->primarykeyauto = $datatable->Field; 
+                        }
+                        
+                        $this->default[$i] = $datatable->Default;
+                        */
+                        $i++;
+                    }
+                    
+                    $this->nocampos=$i; 
+                    
+                    // grupos de variables
+                    foreach ($data->group as $group) {		// aca creo los arrays de caracteristicas
+                        $variables=explode(',',$group->variables);
+                        $startname = $this->getnamebyxmlid($variables[0]);
+                        $varss='';
+                        foreach ($variables AS $variable){ 
+                            $nombre=$this->getnamebyxmlid($variable); // armo la cadena de nombres
+                            if ($varss=='') {
+                                $varss.="$nombre";
+                            } else {
+                                $varss.=",$nombre";
+                            }
+                        }
+                        if ($group->multiple == '1') {
+                            $mnor=TRUE;
+                        } else {
+                            $mnor=FALSE;
+                        }
+						if ($group->titleformula == 'Invoice' AND $group->formula == 'SUM') {
+							$namecampf=$this->getnamebyxmlid($group->campformula);
+							$this->formulas[$namecampf]['qty']=$this->getnamebyxmlid($group->campformula+1);
+							$this->formulas[$namecampf]['totalcamp']=$this->getnamebyxmlid($group->campformula+2);
+						}
+                        $this->itemsasarray("$group->idgroup",$startname, $varss, $mnor, "$group->groupname");
+                    }                    
+                }   
+				
+                // datapresentation
+                foreach ($xml->presentation AS $present) {
+					
+					if ($present->endl != '') { // campos para salto de linea
+						$camposl=explode(',',$present->endl);
+						if ($camposl!=''){
+							foreach ($camposl AS $campol) {
+								$this->setendl($this->getnamebyxmlid($campol));
+							}
+						}						
+					}					
+					
+                    foreach ($present AS $datapresentation) { 
+                        if ($datapresentation->columns != '' AND $datapresentation->columns > 1) { // cantidad de columnas
+                            $this->setcolumns($datapresentation->columns); 
+                        }
+						
+                        foreach ($datapresentation->bigtitleafter AS $bigtitleafter) { // todos los titulos grandes
+                            $this->setbigtitle($this->getnamebyxmlid($bigtitleafter->id),$bigtitleafter->title);
+                        }
+						$moree="info_".$this->lang."";
+                        foreach ($datapresentation->moreinfo AS $moreinfo) { // mas informacion en el formulario
+                            $this->setmoreinfo($this->getnamebyxmlid($moreinfo->id),$moreinfo->$moree);
+                        }
+						$moreen="name_".$this->lang."";
+                        foreach ($datapresentation->newname AS $newname) { // cambiar el nombre
+                            $this->setnewname($this->getnamebyxmlid($newname->id),$newname->$moreen);
+                        }						
+						
+                        foreach ($datapresentation->special AS $special) { // especiales
+                        
+                            if($special->presentation == 'relation' OR $special->presentation == 'Select') {
+                                $reltion=explode(',',(string) $special->relation);
+                                $this->setselect(''.$this->getnamebyxmlid($special->id).','.$reltion[0].','.$reltion[1].','.$reltion[2].''); // select
+                                if ($special->typeselect == 'Radio') {
+                                    $this->setradioselect($this->getnamebyxmlid($special->id));
+                                } else if ($special->typeselect == 'Checkbox') {
+                                    $this->setcheckboxselect($this->getnamebyxmlid($special->id));
+                                }
+                                
+                                if ($special->orientation == '1') { // si es orientaion vertical
+                                    $this->setguidance($this->getnamebyxmlid($special->id),'vertical');
+                                }
+                                if ($special->multiple == '1') { // si es select multiple
+                                    $this->setselectmultiple($this->getnamebyxmlid($special->id));
+                                }
+                                
+                            } else if ($special->presentation == 'Calendar') {
+                                  $this->setcalendar($this->getnamebyxmlid($special->id));
+                            }
+                            
+                            $campo=$this->getnamebyxmlid($bigtitleafter->id);
+                            $this->setbigtitle($campo,$bigtitleafter->title);
+                        }
+                    }
+                }
+                
+            } else {
+                echo "<b><font color=\"red\">Error cargando XML de datos</font></b>";
+            }            
+            
+        } else {	// si es un formulario sin tablas
+			$this->table='-';
+			$this->nombres[] = 'id';
+			$this->variable[] = 'smallint';
+			$this->tamanovariable[] = '6';
+			$this->readonly[] = 'id';
+			$this->primarykey = 'id';
+			$this->primarykeyauto = 'id';						
+			$this->nocampos=1;
+			$this->hiddencamp[]='id';		
+		}
+		//$this->infoboton= "$table&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";		
+	} 
+
+	/**
+        * Retorna el nombre del campo indexado por un id de un archivo XML
+        * @param    int  $id Id en el documento XML
+        */
+	function getnamebyxmlid($id) {
+        for ($i = 0; $i < $this->nocampos; $i++) {
+            if ($this->idxml[$i] == $id){
+                $nombre = $this->nombres[$i];
+            }
+        }
+        return $nombre;
+    }
+    
+	/**
+        * Retorna el id XML del campo en base al nombre
+        * @param    string  $nombre Nombre del campo
+        */
+	function getxmlidbyname($nombre) {        
+        for ($i = 0; $i < $this->nocampos; $i++) {
+            if ($this->nombres[$i] == $nombre){
+                $id = $this->idxml[$i];
+            }
+        }
+        if ($id != '') {
+            return $id;
+        } else {
+            return false;
+        }   
+    }
+            
+	/**
+        * Retorna array de nombres
+        */
+	function getnombres() {        
+        return $this->nombres;
+    }
+        
+	/**
+        * Retorna el id del grupo en base al nombre de una variable
+        * @param    string  $nombre Nombre del campo
+        */
+	function getgroupidibyname($name) {        
+		$id='';
+		if ($this->itemsarraycamps != '') {
+			foreach ($this->itemsarraycamps   as $clave => $value ){
+				$itemsillos=explode (',', $value); 
+				if(in_array($name, $itemsillos)) {
+					$id=$clave;
+				}
+			}
+			if ($id != '') {
+				return $id;
+			} else {
+				return false;
+			}
+		}
+    }		
+		
+	/**
+        * Retorna el id del campo en base a el nombre de campo
+        * @param    string  $nombre nombre del campo
+        */
+	function getidbyname($nombre) {
+        for ($i = 0; $i < $this->nocampos; $i++) {
+            if ($this->nombres[$i] == $nombre){
+                $id = $i;
+            }
+        }
+        if ($id != '') {
+            return $id;
+        } else {
+            return false;
+        }
+    }    
+    
+	/**
+        * Retorna la cantidad de columnas del formulario activo
+        */
+	function getColumns() {
+            return $this->columns;
+    }    
+	
+	/**
+        * Cambia el nombre del formulario, el nombre por defecto es 'form'
+        * @param    string  $formname Nombre del formulario
+        */
+	function setformname($formname) {
+		$this->formname=$formname;
+		$this->formid=$formname;
+	}
+    
+	/**
+        * retorna el valor pore defcto de un formulario
+        * @param    string  $formname Nombre del formulario
+        */
+	function getvaluebyname($name) {
+            return $this->defaultvalue[$name];
+	}
+
+	/**
+        * Cambia el id del formulario, el id por defecto es 'form'
+        * @param    string  $formid id del formulario
+        */
+	function setformid($formid) {
+		$this->formid=$formid;
+	}
+	
+	/**
+        * Establece si permite el autocomplete en un formulario
+        * @param    Boolean     $state  Estado
+        */        
+	function setautocomplete($state) {
+		$this->autocomplete=$state;
+	}
+		
+	/**
+        * Establece si debe abrir las etiquetas <form>, util cuando se estan fusionando dos formularios
+        * @param    Boolean     $state  Estado
+        */        
+	function setopen($state) {
+		$this->open=$state;
+	}
+	
+	/**
+        * Establece si nueva accion para el formulario, por defecto es PHP_SELF
+        * @param    String    $action  URL Accion
+        */        
+	function setaction($action) {
+		$this->whataction=$action;
+	}
+
+	/**
+        * Cambia un tipo de variable a Calendario
+        * @param    string  $campo Nombre del campo
+        */
+	function setcalendar($campo, $time = FALSE) {
+        if ($id=$this->getidbyname($campo)){
+			if (!$time) {
+				$this->variable[$id] = 'date';
+			} else {
+				$this->variable[$id] = 'datetime';
+			}
+        }
+	}
+    
+	/**
+        * Establece si debe cerrar las etiquetas </form>, util cuando se estan fusionando dos formularios
+        * @param    Boolean     $state  Estado
+        */     
+	function setclose($state) {
+		$this->close=$state;
+	}
+	
+	/**
+        * Cambia el nombre de la url que invocará el script ajax, url por defecto 'ajax.php'
+        * @param    string  $scriptajax         Nombre/URL al script
+        */             
+	function setscriptajax($scriptajax) {
+		$this->scriptajax=$scriptajax;
+	}
+		
+	/**
+        * Establece si crea el boton de envio
+        * @param    Boolean $submit  Estado
+        */ 
+	function submit($submit) {
+		$this->submit=$submit;
+	}			
+
+	/**
+        * configura orientacion de grupos de radios y/o checkbox, por defecto es horizontal
+        * @param   string  $campo Nombre del campo
+        * @param   string  $guidance Orientacion, posibles valores 'horizontal'(defecto), 'vertical'
+        */ 
+	function setguidance($campo, $guidance) {
+        
+		$this->guidance[$campo]=$guidance;
+	}
+    
+	/**
+        * configura un filtro para un select
+        * @param   string  $campo Nombre del campo
+        * @param   string  $filter Filtro en sql para el select
+        */ 
+	function setselectfilter($campo, $filter) {
+        
+		$this->selectsfilter[$campo]=$filter;
+	}
+    
+	/**
+        * Muestra en pantalla el array de campos y propiedades cuando se imprima el formulario en pantalla
+        */ 
+	function debug() {
+		$this->debug=TRUE;
+	}
+    
+	/**
+        * Desactiva la presentacion de imagenes junto al titulo, desabilita la generacion del ajax wenloading
+        */ 
+	function noimages() {
+		$this->images=FALSE;
+	}
+
+	/**
+        * Cambia el nombre/url de la imagen que se mostrará junto al titulo
+        * @param    string  $imageform         Nombre/URL a la imagen
+        */             
+	function setimageform($imageform) {
+		$this->imageform=$imageform;
+	}	
+
+    /**
+        * Cambia el nombre/url de la imagen que se mostrará cuando se este ejecutando ajax
+        * @param    string  $imageformajax         Nombre/URL a la imagen
+        */             
+	function setimageformajax($imageformajax) {
+		$this->setimageformajax=$imageformajax;
+	}
+
+    /**
+        * Cambia el nombre del ID que contiene imageform
+        * @param    string  $idimageform         Nombre del id que contiene la imagen
+        */             
+	function setidimageform($idimageform) {
+		$this->idimageform=$idimageform;
+	}
+
+    /**
+        * Establece un campo del formulario como solo lectura
+        * @param   string  $campo Nombre del campo
+        */         
+	function setreadonly($campo) {
+		$this->readonly[]=$campo;
+	}
+    
+
+    /**
+        * Establece Todos los campos como solo lectura, debe llamrse antes de showform
+        * @param   string  $campo Nombre del campo
+        */         
+	function setallreadonly() {
+		foreach($this->nombres AS $campo) {
+			$this->readonly[]=$campo;
+		}
+	}
+	
+    /**
+        * Establece un select configurado como multiple
+        * @param   string  $campo Nombre del campo
+        */         
+	function setselectmultiple($campo) {
+		$this->multiples[]=$campo;
+	}
+
+	/**
+        * Si el campo esta definido como select, establece los valores que lo compongan como radio buttons
+        * @param   string  $campo Nombre del campo
+        */ 
+	function setradioselect($campo) {
+		$this->radios[]=$campo;
+	}
+
+	/**
+        * Si el campo esta definido como select, establece los valores que lo compongan como checkbox
+        * @param   string  $campo Nombre del campo
+        */ 
+	function setcheckboxselect($campo) {
+		$this->checkboxs[]=$campo;
+	}
+	
+	/**
+        * Establece un valor por defecto si el campo esta definido como select
+        * @param   string  $campo Nombre del campo
+        * @param   string  $value1 valor del select
+        * @param   string  $value2 Nombre en pantalla del select
+        */         
+	function firstvalueselect($campo, $value1='', $value2='...') { // para un select cuando se quiere mostrar un primer campo
+		$this->firstvalueselect[$campo]="<option value=\"$value1\">$value2</option>\n";
+	}
+        
+	/**
+        * Crea un nuevo campo en el formulario, justo despues de un campo ya existente
+        * @param   string  $before Nombre del campo existente
+        * @param   string  $name Nombre del campo nuevp
+        * @param   string  $var Tipo de variable del campo
+        * @param   string  $size Tamaño de la variable
+        * @param   string  $null Varibale Nula o no nula
+        */          
+	function newcamp($before,$name,$var,$size,$null) {
+		if($null=='NULL' OR $null == 'null') { // si es nulo
+			$null='YES';
+		} else {
+			$null='NO';
+		}
+		$b=0;
+		$sis=count($this->nombres);	
+		
+		for ($i=0; $i<=$sis; $i++) {
+
+			$newnombres[$b]=$this->nombres[$i];
+			$newvariable[$b]=$this->variable[$i];
+			$newtamanovariable[$b]=$this->tamanovariable[$i];
+			$newnulo[$b]=$this->nulo[$i];
+			$defaultt[$b]=$this->default[$i];
+			$b++;			
+			if ($before==$this->nombres[$i]) {
+				$newnombres[$b]=$name;
+				$newvariable[$b]=$var;
+				$newtamanovariable[$b]=$size;
+				$newnulo[$b]=$null;
+				$defaultt[$b]='';
+				$b++;					
+			}
+		}	// actualizo arrays y numero de campos
+		$this->nombres=$newnombres;
+		$this->variable=$newvariable;			
+		$this->tamanovariable=$newtamanovariable;
+		$this->nulo=$newnulo;
+		$this->default=$defaultt;
+		$this->nocampos++;
+	}
+        
+	/**
+        * Cambia un campo en el formulario
+        * @param   string  $camp Nombre del campo que se quiere editar las propiedades
+        * @param   string  $var Tipo de variable del campo
+        * @param   string  $size Tamaño de la variable
+        * @param   string  $null Varibale Nula o no nula
+        */          
+	function changetypecamp($camp,$var,$size,$null) {
+        $id=$this->getidbyname($camp);
+		$this->variable[$id]=$var;
+		$this->tamanovariable[$id]=$size;
+        $this->nulo[$id]=$null;        
+	}
+    
+	/**
+        * Agrupa una serie de formularios pra crear un arraay de una sola tabla
+        * @param   string  $name Nombre de la agrupacion
+        * @param   string  $item Nombre del campo item inicial
+        * @param   string  $camps Campos del array separados por comas
+        * @param   booblean  $more Si es verdadero permite añadir mas grupos para formar tablas de datos
+        * @param   string  $titulo Titulo de la agrupacion
+        */          
+	function itemsasarray($name, $item, $camps, $more = TRUE, $titulo = '') {
+        // nombre del array y disparador
+        $this->itemsarrayname[$name]=$item;
+        $this->itemsarraycamps[$name]=$camps;
+        $this->itemsarraytitle[$name]=$titulo;    
+        $this->itemsarraymore[$name]=$more; 
+        $campos=explode(',',$camps);
+        foreach ($campos AS $campo) { 
+            $this->sethidden($campo); // oculto los forms en el resto del recorrido
+        }
+
+    }
+    
+	/**
+        * Permite establecer información en html junto al boton de envio del formulario
+        * @param   string  $info html
+        */ 
+	function setinfoboton($info) {
+		$this->infoboton=$info;
+	}
+	
+	/**
+        * Permite establecer un titulo al formulario
+        * @param   string  $title html
+        */         
+	function settitle($title) {
+		$this->title=$title;
+	}	
+    
+	/**
+        * Permite establecer un titulo en cualquier lugar del formulario, sin importar la cantidad de columnas
+        * las agrupa para poder mostrar siempre el titulo
+        * @param   string  $campo Nombre del campo anterior en donde se ubicará el titulo
+        * @param   string  $value Titulo a mostrar
+        */                
+	function setbigtitle($campo,$value) {
+		$this->bigtitle[$campo]=$value;
+	}
+
+    
+	/**
+        * Permite establecer un campo tipo slider, usa la libreria mootols
+        * @param   string  $campo Nombre del campo anterior en donde se ubicará el titulo
+        * @param   string  $value Titulo a mostrar
+        */                
+	function setslider($campo,$range = 100) {
+		$this->setslider[$campo]=$range;
+	}
+	
+	/**
+        * El formulario por defecto es de una columna, con esta llamada podemos establecer un formulario dividido en más columnas
+        * @param   int  $columns html
+        */  
+	function setcolumns($columns) {
+		$this->columns=$columns;
+	}
+	
+	/**
+        * Establece mas javascript dentro del action
+        * @param   string  $javscript mas javascript antes del action
+        */  
+	function setjavascript($javscript) {
+		$this->javscript=$javscript;
+	}
+	
+	/**
+        * Permite cambiar el nombre del boton del formulario, por defecto es 'Agregar'
+        * @param   string  $namebutton nuevo nombre del boton
+        */         
+	function setnamebutton($namebutton) {
+		$this->namebutton=$namebutton;
+	}
+
+	/**
+        * Establece mostrar la información de un campo como html
+        * @param   string  $campo Nombre del campo
+        */
+	function setashtml($campo) {
+		$this->showashtml[]=$campo;
+	}
+	
+	/**
+        * Establece mostrar la información de un campo como html ocupando todo el bloque
+        * @param   string  $campo Nombre del campo
+        */
+	function setashtmlblock($campo) {
+		$this->showashtmlblock[]=$campo;
+	}
+	
+	/**
+        * Establece si prearma el javscript para el Ajax de lista dinamica con la libreria dynamic-list.js
+        * @param   string  $campo Nombre del campo
+        */    
+	function setdynamiclist($campo) {		                        // establece campos como lista dinamica
+		$this->dynamiclist[]=$campo;
+	}
+	
+	/**
+        * No muestra un campo en el fomulario ni crea un form hidden
+        * @param   string  $hiddencamp Nombre del campo
+        */	
+	function sethidden($hiddencamp) {
+        $campos=explode(',',$hiddencamp);
+        if ($campos!=''){
+            foreach ($campos AS $campo) {
+                $this->hiddencamp[]=$campo;
+            }
+        }
+	}	
+	
+	/**
+        * Hace un salto de linea sin importar las columnas restantes despues de un campo
+        * @param   string  $endl Nombre del campo 
+        */	
+	function setendl($endl) {
+		$this->endl[]=$endl;
+	}
+
+	/**
+        * No muestra un campo en el fomulario, CREA un form hidden
+        * @param   string  $hiddenform Nombre del campo
+        */
+	function sethiddenform($hiddenform) {
+		$this->hiddenform[]=$hiddenform;
+	}
+
+	/**
+        * Configura un campo para hacer un select,se envia un string el cual será explotado por comas
+        * Ej:
+        *  $form->setselect('Ciudad,Ciudad,id_ciudad,Nombre');
+        * El Campo Ciudad se relacionará con la tabla Ciudad, de esta ultima se armará
+        * el select, el valor del select será id_ciudad y el valor a mostrar en pantalla Nombre
+        * @param   string  $hiddencamp Cuatro valores separados por comas
+        */	
+	function setselect($setselect) {
+		$this->selects[]=$setselect;
+	}
+
+	/**
+        * Establece el parametro de ordenación para un select
+        * El campo value siempre se llama 'data1', y el valor siempre se llamará 'data2'
+        * @param   string  $campo Nombre del campo configurado como select
+        * @param   string  $value Valor del campo por el cual se ordena
+        */        
+	function orderselect($campo,$value) {
+		$this->orderselect[$campo]=$value;
+	}
+
+	/**
+        * Establece cualquier campo como un form tipo file
+        * @param   string  $campo Nombre del campo
+        */
+	function setfileform($campo) {
+		$this->fileform[]=$campo;
+	}
+        
+
+	/**
+        * Establece cualquier campo como diligenciado
+        * @param   string  $campo Nombre del/los campo/s separados por coma
+        */
+	function setsubmited($campoh) {       
+        $campos=explode(',',$campoh);
+        if ($campos!=''){
+            foreach ($campos AS $campo) {
+                $this->submiteds[]=$campo;
+            }
+        }        
+	}
+             
+	/**
+        * Establece una activacion de javascript para los campos submited !
+        * @param   string  $campo Nombre del campo
+        */        
+	function activesubmited($campo) {
+		$this->activesubmited=$campo;
+    }
+	              
+	/**
+        * Establece un valor por defecto para un campo
+        * @param   string  $campo Nombre del campo
+        * @param   string  $value Valor del campo
+        */        
+	function setdefaultvalue($campo,$value) {
+		$this->defaultvalue[$campo]=$value;
+    }
+	        
+	/**
+        * Establece un valor por defecto para un campo de un grupo
+        * @param   string  $campo Nombre del campo
+        * @param   string  $value Valor del campo
+        */        
+	function setdefaultvaluetab($campo,$value) {
+		$this->defaultvaluetab[$campo][]=$value;
+	}
+
+	/**
+        * Cambia el nombre descriptivo de un campo
+        * @param   string  $campo Nombre del campo
+        * @param   string  $name Nombre descriptivo nuevo
+        */  
+	function setnewname($campo,$name) {
+		$this->newname[$campo]=$name;
+	}	
+	
+	/**
+        * Cambia el nombre descriptivo de los campos contenidos en un array nombre -> valor
+        * @param   array  $campos  array nombre -> valor
+        */  
+	function setnewnames($campos) {
+		foreach($campos as $clave => $value) {
+			$this->newname[$clave]=$value;
+		}
+	}		
+	
+        /**
+        * Crea contenido dentro de las etiquetas de un campo de un formulario, muy util por ejemplo para agregar javascripts
+        * @param   string  $campo Nombre del campo
+        * @param   string  $javascript Javascript o contenido a agregar dentro de la etiqueta
+        */  
+	function putjavascript($campo,$javascript) {
+		$this->javascript[$campo]=$javascript;
+	}	
+	
+        /**
+        * Permite ingresar html antes de la descripcion del formulario de un campo
+        * @param   string  $campo Nombre del campo
+        * @param   string  $value Contenido a agregar
+        */ 	
+	function setcommentbefore($campo,$value) {
+		$this->commentsbefore[$campo]=$value;
+	}
+
+        /**
+        * Permite ingresar html despues  de la descripcion del formulario de un campo
+        * @param   string  $campo Nombre del campo
+        * @param   string  $value Contenido a agregar
+        */ 
+	function setcommentafter($campo,$value) {
+		$this->commentsafter[$campo]=$value;
+	}
+	
+        /**
+        * ????  Permite ingresar html despues  del formulario de un campo
+        * @param   string  $campo Nombre del campo
+        * @param   string  $value Contenido a agregar
+        */         
+	function setmoreinfo($moreinfo,$datainfo) {
+		$this->moreinfo[$moreinfo]=$datainfo;
+	}
+	
+	function depselectreal($depselectr) {		                        // configurar ajax depselect reales
+		$this->depselectr[]=$depselectr;
+	}	
+
+	function reqselect($reqselect) {		                        // configurar ajax depselect reales
+		$this->reqselect[]=$reqselect;
+	}
+	
+	function depselectvirtual($depselectv) {		                // configurar ajax depselect un campo virtual
+		$this->depselectv[]=$depselectv;
+	}
+	
+        /**
+        * Retorna el numero de campos
+        * @return integer 
+        */           
+	function getncamps() {
+		return $this->nocampos;
+	}
+
+        /**
+        * Retorna el campo llave primaria
+        * @return string 
+        */   
+	function getprimarykey() {
+		return $this->primarykey;
+	}
+
+    /**
+     * function wordCut($sText, $iMaxLength, $sMessage)
+     * + cuts an wordt after $iMaxLength characters
+     * @param  string   $sText       the text to cut
+     * @param  integer  $iMaxLength  the text's maximum length
+     * @param  string   $sMessage    piece of text which is added to the cut text, e.g. '...read more'
+     * @returns string
+     **/    
+    function wordCut($sText, $iMaxLength, $sMessage)
+    {
+       if (strlen($sText) > $iMaxLength){
+               
+           $sString = wordwrap($sText, ($iMaxLength-strlen($sMessage)), '[cut]', 1);
+           $asExplodedString = explode('[cut]', $sString);
+          
+           $sCutText = $asExplodedString[0];
+          
+           $sReturn = $sCutText.$sMessage;
+       } else {
+           $sReturn = $sText;
+       }
+      
+       return $sReturn;
+    }
+
+    /**
+    * Crea el codigo javascript automáticamente deacuerdo a los campos
+    * - Los campos marcados como NULL, crea el codigo para checkerlos
+    * - Valida enteros y flotantes
+    * - Valida direcciones de email, para esto el campo debe llamarse 'email', o 'e-mail' o 'mail'
+    */ 
+	function makejavascript() {		
+		$dates=1; 
+		$this->printjavascript=TRUE;
+		echo "<script type=\"text/javascript\">
+
+		function in_array( what, where ){
+			var a=false;
+			for(var i=0;i<where.length;i++){
+			  if(what == where[i]){
+				a=true;
+				break;
+			  }
+			}
+			return a;
+		}
+
+		function validar".$this->formname."(formulario) {\n";
+
+		echo "	function validarEntero(valor){ 
+		      //intento convertir a entero. 
+		     if (valor!='') {
+			     valor = parseInt(valor) 
+			      if (isNaN(valor)) {         
+			            return (true); 
+			      }else{ 
+			            return (false); 
+			      } 
+		      } else {
+		      		return (false);
+		      }
+		}\n";
+		echo "	function validarFlotante(valor){ 
+		      //intento convertir a flotante. 
+		     if (valor!='') {
+			     valor = parseFloat(valor) 
+			      if (isNaN(valor)) {         
+			            return (true); 
+			      }else{ 
+			            return (false); 
+			      } 
+		      } else {
+		      		return (false);
+		      }
+		}\n";		
+		
+		for ($i = 0; $i < $this->nocampos; $i++) {  // en este for recorre el formulariovalidarformz
+			
+			$hiddencamp = FALSE;
+			$nombrecampo=$this->nombres[$i];
+			if ($this->hiddencamp!=NULL) {
+				foreach ($this->hiddencamp as $hidden) {	// busco si el campo es escondido no ceckeo validacion
+					if ($hidden==$this->nombres[$i]){
+						$hiddencamp = TRUE;	
+					}
+				}
+			}
+            
+            $multiple=FALSE;
+            if($this->multiples!=NULL){
+                foreach ($this->multiples as $clave) {		// si es select multiple marco como si ufera hidden
+                    if ($clave==$this->nombres[$i]){
+                        $hiddencamp = TRUE;
+                    }
+                }
+            }
+                
+			if($this->showashtml!=NULL){
+				foreach ($this->showashtml as $value) {		// marco si debo mostrar como html es como si fuera hidden
+					if ($value==$this->nombres[$i]){
+						$hiddencamp = TRUE;
+					}
+				}
+			}    
+            
+			if($this->showashtmlblock!=NULL){
+				foreach ($this->showashtmlblock as $value) {		// marco si debo mostrar como html es como si fuera hidden
+					if ($value==$this->nombres[$i]){
+						$hiddencamp = TRUE;
+					}
+				}
+			}
+            
+            if($this->fileform!=NULL){
+                foreach ($this->fileform as $clave) {		// si es un menu file
+                        if ($clave==$this->nombres[$i]){
+                                $hiddencamp = TRUE;
+                        }
+                }
+			}
+            
+			$namecamp=$this->nombres[$i];
+			if($this->newname!=NULL){
+				foreach ($this->newname as $clave => $value) {		// si reemplazo el nombre
+					if ($clave==$this->nombres[$i]){
+						$namecamp = "$value";
+					}
+				}
+			}
+            
+			if ($this->variable[$i]=="date" OR $this->variable[$i]=="datetime") {		// si es campo de fecha
+				$nombrecampo="date"."$dates";
+				$dates++;
+			}	
+					
+			if($this->hiddenform!=NULL){
+				foreach ($this->hiddenform as $value) {		// si es hidden ignora
+					if ($value==$this->nombres[$i]){
+						$hiddencamp = TRUE;
+					}
+				}
+			}
+            
+            if ($this->variable[$i]=="mediumtext"){ // si es un medium texto ignora
+                $hiddencamp = TRUE;
+            }
+        
+			if (!$hiddencamp) {	// si el campo NO es oculto		
+				if ($this->nulo[$i]!='YES'){  	// Para crear validacion de no nulo
+					echo "if (formulario.".$nombrecampo.".value.length==0) {
+						    alert(\"".$namecamp." ".$this->msgnonull."\");
+						    formulario.".$nombrecampo.".focus();
+						    return (false);
+						  }\n";
+				}
+
+			
+				if ($this->variable[$i]=="bigint" OR $this->variable[$i]=="int" OR $this->variable[$i]=="smallint" OR $this->variable[$i]=="tinyint") {// si es campo es entero
+					echo "".$nombrecampo." = formulario.".$nombrecampo.".value
+					var es".$nombrecampo." = validarEntero(".$nombrecampo.")
+					if (es".$nombrecampo."){
+						alert(\"".$this->msgnoint." ".$namecamp.".\")
+						formulario.".$nombrecampo.".focus()
+						return (false);
+					}\n";
+				}
+				if ($this->variable[$i]=="float" OR $this->variable[$i]=="double") {		// si es campo es flotante
+					echo "".$nombrecampo." = formulario.".$nombrecampo.".value
+					var es".$nombrecampo." = validarFlotante(".$nombrecampo.")
+					if (es".$nombrecampo."){
+						alert(\"".$this->msgnofloat." ".$namecamp.".\")
+						formulario.".$nombrecampo.".focus()
+						return (false);
+					}\n";
+				}
+				
+				if ($this->nombres[$i]=='email' OR $this->nombres[$i]=='e-mail' OR $this->nombres[$i]=='mail') { // emails
+					echo "if(formulario.".$nombrecampo.".value != '') {
+						if (formulario.".$nombrecampo.".value.indexOf('@', 1) == -1 || formulario.".$nombrecampo.".value.indexOf('.', formulario.".$nombrecampo.".value.indexOf('@', 0)) == -1) {
+						alert(\"".$this->msgnomail."\"); 
+						formulario.".$nombrecampo.".focus(); 
+						return (false);
+						}
+					}\n";
+				}								
+ 			}
+		}
+		if ($this->javscript) { 
+			echo "\n".$this->javscript."\n";
+		}
+        // sy existen array salva los ultimos datos
+        if($this->itemsarrayname!=NULL){
+            foreach ($this->itemsarrayname  as $clave => $value) {		// valores de info antes
+                $makearray=$clave; // guardo el nombre del array de formularios
+                echo "
+                if (dynamicValidation".$makearray."()) {
+                    savedata".$makearray."();
+                } else {
+                    return (false);
+                }
+";      
+            }
+        }
+		echo"
+            return (true); 
+";
+        echo"
+		}
+		</script>\n";
+	
+        // crea el javascript necesario para los efectos mootols
+        if($this->setslider!=NULL){
+           echo "<script type=\"text/javascript\">
+					window.addEvent('domready', function(){\n";
+					foreach($this->setslider   as $clave => $value) {
+						if($this->defaultvalue[$clave] != "") {
+							$set=$this->defaultvalue[$clave];
+						} else {
+							$set="0";
+						}
+						echo "
+								var el = $('slider_".$clave."');
+								new Slider(el, el.getElement('.knob_".$clave."'), {
+									steps: ".$value.",
+									wheel: true,	
+									onChange: function(value){
+										// Everytime the value changes, we change the font of an element
+										$('sliderset_".$clave."').set('html', value);
+										$('".$clave."').set('value', value);
+									}
+								}).set(".$set.");
+							";
+					}
+            echo"
+			});
+		</script>\n";
+        }
+		
+        // crea el javascript necesario para activar los submited camps
+        if($this->activesubmited!=NULL){
+           echo "<script type=\"text/javascript\">\n";
+                    echo "
+                        function activeSubmited() { 
+                        ";
+                        if($this->submiteds != NULL){
+                            foreach ($this->submiteds as $value) {		// marco si debo mostrar como diligenciado 
+                                    echo "
+                                document.getElementById('".$value."').className = '".$this->styleforms."';                    
+                                document.getElementById('".$value."').readOnly=false;                 
+                                ";
+                            }
+                        } 
+                        echo "
+                        }";
+            echo"
+		</script>\n";
+        }
+        
+        // crea el javascript necesario para las posibles tablas de arrays de formularios
+        if($this->itemsarrayname!=NULL){
+            foreach ($this->itemsarrayname  as $clave => $value) {		// valores de info antes
+                    $makearray=$clave; // guardo el nombre del array de formularios
+                    
+                    echo "<script type=\"text/javascript\">\n";
+                    
+							//  (this, 1,'VALOR_UNITARIO', 'VALOR_TOTAL_ANTES_DE_IVA')
+						echo "	
+						function makemul".$makearray."(qty, unitario, total, actual){ 
+							var unitario = document.getElementById(unitario+ '_' + actual);
+							var totality = unitario.value * qty.value;
+							document.getElementById(total+ '_' + actual).value=totality;
+						}\n
+						function changeunitary".$makearray."(qty, next, actual){ 
+							document.getElementById(next+  '_' + actual).value='';
+							document.getElementById(qty+ '_' + actual).value='';
+						}\n
+";    						
+                        // al menos valido que es un campo antes de de agregar otra fila
+                        echo "
+                        function dynamicValidation".$makearray."() {
+                            var actual = document.getElementById('cont_".$makearray."').value;
+                            var Tabla = document.getElementById('tabla_".$makearray."');
+							var deleted = document.getElementById('deleted_".$makearray."').value;
+						    var deletedcamps=deleted.split(','); 
+
+                            var i=1;
+                            for (i=1; i <= actual; i++)
+                            {
+							if (!(in_array(i, deletedcamps))) {
+									if ( document.getElementById('table_row_".$makearray."_' + i)) {
+	";
+								$campos=explode(',', $this->itemsarraycamps[$makearray]);
+								foreach($campos AS $campo) { // recorro los campos
+									$id=$this->gettheidbyname($campo); // saco el id                              
+									if ($this->nulo[$id]!='YES'){  	// Para poner la marca de asterisco
+									
+									echo "if (document.getElementById('".$campo."_' + i).value.length==0) {
+											alert(\"".$campo." No puede ser vacio\");
+											document.getElementById('".$campo."_' + i).focus();
+											return (false);
+									}\n";
+								
+									}
+								}
+								echo "
+									}
+								}
+							}
+";
+                            echo "
+                            // guardo datos en array
+                            savedata".$makearray."();
+                            return (true);
+                        }
+";
+                        // Guardo datos del array
+                        echo "
+                        function savedata".$makearray."() {
+                            var actual = document.getElementById('cont_".$makearray."').value;
+                            var Tabla = document.getElementById('tabla_".$makearray."');
+							var deleted = document.getElementById('deleted_".$makearray."').value;
+						    var deletedcamps=deleted.split(','); 
+                            var values = '';
+                            var i=1;
+                            for (i=1; i <= actual; i++)
+                            {
+							if (!(in_array(i, deletedcamps))) {
+                                if ( document.getElementById('table_row_".$makearray."_' + i)) {
+									if (values != '') {
+										values = values + '".$this->valuestr."';
+									}
+";
+                            $campos=explode(',', $this->itemsarraycamps[$makearray]);
+							$maximun=count($campos);
+							$x=0; // para detectar el ultimo
+                            foreach($campos AS $campo) { // recorro los campos
+								$x++;
+								if ($x == $maximun) {
+									$tdvar="";
+								} else {
+									$tdvar=$this->valuestd;
+								}
+                                $id=$this->gettheidbyname($campo); // saco el id
+                                if ($this->variable[$id]=="binary"){  // si es un checkbox tengo que validar mas
+                                    echo "
+                                        if (document.getElementById('".$campo."_' + i).checked) {
+                                            values = values + '1' + '".$tdvar."';
+                                        } else {
+                                            values = values + '0' + '".$tdvar."';
+                                        }
+                                        ";
+                                
+                                } else {
+                                    echo "
+                                        values = values + document.getElementById('".$campo."_' + i).value + '".$tdvar."';\n";
+                                }
+                            }
+							// aca termina el recorrido de cada tr
+                                echo" 
+                                    }
+							}
+						}
+";
+                            echo "
+                            // guardo los valores
+                            document.getElementById('values_".$makearray."').value = values;
+                        }
+";
+						// actual es elcontador de cada elemento de la tabla NO ES UN ID DE FORMULARIO
+                        echo "	
+                            function dynamicTable".$makearray."addrow(){ 
+                                    var actual = document.getElementById('cont_".$makearray."').value;
+                                    actual++;
+
+                                if (dynamicValidation".$makearray."()) {
+                                    var Tabla = document.getElementById('tabla_".$makearray."');
+                                    var tr = Tabla.insertRow(-1);
+									tr.vAlign = 'top';
+                                    // establezco id de la tabla
+                                    tr.id='table_row_".$makearray."_' + actual;
+";
+							// aca empiezo a dibujar los formularios html de la tabla
+                        $campos=explode(',', $this->itemsarraycamps[$makearray]);
+                        foreach($campos AS $campo) { // recorro los campos
+                            echo "
+                                        var td = tr.insertCell(-1);
+                                        td.innerHTML = '";
+                                        
+                            $id=$this->gettheidbyname($campo); // saco el id
+                            $texttt=FALSE;
+                                
+                            if ($this->nulo[$id]=='YES'){  	// Para poner la marca de asterisco
+                                echo "";
+                            } else {
+                                echo "*";			
+                            }	 
+							
+							if ($this->formulas != '')  {
+								foreach ($this->formulas as $clave => $value) {
+									$idqty=$this->gettheidbyname($value['qty']); // saco el id de qty
+									$idtotalcamp=$this->gettheidbyname($value['totalcamp']); // saco el id de totalcamp
+									$idunitario=$this->gettheidbyname($clave); // saco el id de unitario
+									if ($id == $idqty) {
+										$toformu="onChange=\"makemul".$makearray."(this, \'".$clave."\', \'".$value['totalcamp']."\', ' + actual + ')\"";
+									} else if ($id == $idtotalcamp) {
+										$toformu="readonly";
+									} else if ($id == $idunitario) {
+										$toformu="onChange=\"changeunitary".$makearray."(\'".$value['qty']."\', \'".$value['totalcamp']."\', ' + actual + ')\"";
+									}
+								}
+							} else {
+								$toformu="";
+							}
+							                            
+                            if ($this->variable[$id]=="text") {		// si es campo de texto
+                                echo "<textarea class=\"".$this->styleforms."\" rows=5 cols=26 id=\"".$this->nombres[$id]."_' + actual +'\" name=\"".$this->nombres[$id]."[]\" $sreadonly>$defaultvalues</textarea>";
+                            } else if ($this->variable[$id]=="date") {		// si es campo de fecha
+                                echo "<input class=\"".$this->styleforms."\" type=\"text\" id=\"".$this->nombres[$id]."_' + actual +'\" name=\"".$this->nombres[$id]."[]\" size=10 maxlength=\"10\" $sreadonly $defaultvalues>&nbsp;<small>(AAAA-MM-DD)</small>";
+                                
+                            } else if ($this->variable[$id]=="bigint" OR $this->variable[$id]=="float") {  // si es algun tipo de entero
+                            
+                                echo "<input class=\"".$this->styleforms."\" type=\"text\" id=\"".$this->nombres[$id]."_' + actual +'\" name=\"".$this->nombres[$id]."[]\" size=\"10\" maxlength=\"".$this->tamanovariable[$id]."\" $sreadonly $toformu $defaultvalues>\n";
+                                
+                            } else if ($this->variable[$id]=="int" OR $this->variable[$id]=="smallint") {  // si es lagun tipo de entero
+                            
+                                echo "<input class=\"".$this->styleforms."\" type=\"text\" id=\"".$this->nombres[$id]."_' + actual +'\" name=\"".$this->nombres[$id]."[]\" size=\"6\" maxlength=\"".$this->tamanovariable[$id]."\" $sreadonly $toformu $defaultvalues>";
+                                
+                            } else if ($this->variable[$id] == "tinyint") {  // si es lagun tipo de entero
+                            
+                                echo "<input class=\"".$this->styleforms."\" type=\"text\" id=\"".$this->nombres[$id]."_' + actual +'\" name=\"".$this->nombres[$id]."[]\" size=\"2\" maxlength=\"".$this->tamanovariable[$id]."\" $sreadonly $toformu $defaultvalues>";
+                                
+                            } else if ($this->variable[$id]=="binary") {  // si es un booleano
+                                if ($defaultvalues=="value=\"1\"") {
+                                    $defaultvalues="checked";
+                                    $selectedd1="checked";
+                                } else {
+                                    $defaultvalues="";
+                                    $selectedd2="checked";
+                                }				
+                                echo "&nbsp;&nbsp;<input type=\"checkbox\" id=\"".$this->nombres[$id]."_' + actual +'\" name=\"".$this->nombres[$id]."[]\" value=\"1\" $sreadonly $defaultvalues>";				
+                            } else if ($this->variable[$id]=="double") {
+                                echo "<input class=\"".$this->styleforms."\" type=\"text\" id=\"".$this->nombres[$id]."_' + actual +'\" name=\"".$this->nombres[$id]."[]\" size=\"10\" maxlength=\"22\" $sreadonly  $toformu $defaultvalues>";
+                            } else if ($this->variable[$id]=="varchar" || $this->variable[$id]=="char") {  // si es algun tipo de texto                       
+                                    if ($this->tamanovariable[$id] < 8) {
+                                        $sizecampo = 8;
+                                    } else if ($this->tamanovariable[$id] < 40) {
+                                        $sizecampo = 16;
+                                    } else if ($this->tamanovariable[$id] > 150 AND $this->tamanovariable[$id] < 200) {
+                                        $texttt=TRUE;
+                                        $sizecampo = 2;
+                                    } else if ($this->tamanovariable[$id] > 199) {
+                                        $texttt=TRUE;
+                                        $sizecampo = 3;
+                                    } else {
+                                        $sizecampo = 20;
+                                    }
+                                    if ($texttt) {
+                                        echo "<textarea class=\"".$this->styleforms."\" rows=$sizecampo cols=26 id=\"".$this->nombres[$id]."_' + actual +'\" name=\"".$this->nombres[$id]."[]\" $sreadonly>$defaultvalues</textarea>";
+                                    } else {
+                                    
+                                        if ($this->tamanovariable[$i]=='66') {
+                                            echo "<input class=\"".$this->styleforms."\" type=\"password\" id=\"".$this->nombres[$id]."_' + actual +'\" name=\"".$this->nombres[$id]."[]\" size=\"10\" maxlength=\"20\" $sreadonly $defaultvalues>";
+                                        } else {
+                                            echo "<input class=\"".$this->styleforms."\" type=\"text\" id=\"".$this->nombres[$id]."_' + actual +'\" name=\"".$this->nombres[$id]."[]\" size=\"$sizecampo\" maxlength=\"".$this->tamanovariable[$id]."\" $sreadonly $defaultvalues>";							
+                                        }
+                                    }
+                                }
+                                        echo "';";
+                            }
+
+                            echo "
+                                    var td = tr.insertCell(-1);
+                                    td.innerHTML = '<a href=\"javascript: dynamicTable".$makearray."removerow(' + actual +')\"><small><b>[-]</b></small></a>';
+                                    document.getElementById('cont_".$makearray."').value++;
+                                }
+                            }\n";                    
+							// super codigo simple para eliminar items de la tabla 
+                            echo "	
+                            function dynamicTable".$makearray."removerow(id){ 
+								var deleted = document.getElementById('deleted_".$makearray."');
+								var deltes = deleted.value;
+								if (deltes=='') {
+									deleted.value=id;
+								} else {
+									deleted.value=deltes +',' +id;
+								}
+                                var Row = document.getElementById('table_row_".$makearray."_' + id);
+                                Row.parentNode.removeChild(Row);
+								savedata".$makearray."();
+                            }\n"; 							
+                    echo "</script>\n";
+                }
+            }
+        }	
+	
+        /**
+        * Crea el javascript/ajaX necesario para los selects dependientes
+        */         
+	function makeajax() {
+		echo "<script type=\"text/javascript\">\n";		
+		if($this->depselectv!=NULL){		// si hay un menu depselect virtual
+			foreach ($this->depselectv as $depselect) {
+				$selectcontents = explode (',', $depselect);
+			
+				echo "function get".$selectcontents[0]."(sel)
+				{
+					var ".$selectcontents[1]." = sel.options[sel.selectedIndex].value;
+					document.getElementById('".$selectcontents[0]."').options.length = 0;
+					if(".$selectcontents[1].".length>0){
+						ajax.requestFile = '".$this->scriptajax."?".$selectcontents[1]."='+".$selectcontents[1].";
+                        ajax.onLoading = whenLoading();
+						ajax.onCompletion = create".$selectcontents[0].";	// funcion para ejecutar
+						ajax.runAJAX();
+					}
+				}
+
+				function create".$selectcontents[0]."()
+				{
+					var obj = document.getElementById('".$selectcontents[0]."');
+					eval(ajax.response);
+                ";
+                if ($this->images) {
+                    echo "
+                    var imageform = document.getElementById('".$this->idimageform."'); 
+                    imageform.innerHTML = '<img src=\"images/".$this->imageform."\" border=\"0\" align=\"right\">';";
+                }
+				echo "
+                }
+				";
+			}
+		}
+
+		if($this->depselectr!=NULL){		// si hay un menu depselect real
+			$ultimo="";
+			foreach ($this->depselectr as $depselect) {
+				$selectcontents = explode (',', $depselect);
+				if ($ultimo==$selectcontents[0]) {
+					$backultimo=$ultimo;
+					$selectcontents[0]=$selectcontents[0]."2";
+				} else {
+					$ultimo=$selectcontents[0];
+					$backultimo='';
+					$selectcontent=$selectcontents[3];
+				}
+				echo "function get".$selectcontents[3]."(sel)
+				{
+					var ".$selectcontents[0]." = sel.options[sel.selectedIndex].value;
+					document.getElementById('".$selectcontents[3]."').options.length = 0;
+					if(".$selectcontents[0].".length>0){
+						ajax.requestFile = '".$this->scriptajax."?".$selectcontents[0]."='+".$selectcontents[0].";
+                        ajax.onLoading = whenLoading();
+						ajax.onCompletion = function(){ create".$selectcontents[3]."(sel); };	// funcion para ejecutar    
+						ajax.runAJAX();
+					}
+				}
+
+				function create".$selectcontents[3]."(sel)
+				{
+					var obj = document.getElementById('".$selectcontents[3]."');
+					eval(ajax.response);
+                    ";
+                if ($this->images) {
+                    echo "
+                    var imageform = document.getElementById('".$this->idimageform."'); 
+                    imageform.innerHTML = '<img src=\"images/".$this->imageform."\" border=\"0\" align=\"right\">';";
+                }
+				if ($backultimo != '') {
+					echo "
+						get".$selectcontent."(sel);
+						";
+				}
+				echo "
+                    }
+				";
+			}
+		}
+		
+		if($this->reqselect!=NULL){		// si hay un menu depselect real
+			foreach ($this->reqselect as $depselect) {
+				$selectcontents = explode (',', $depselect);
+			
+				echo "function get".$selectcontents[0]."(sel)
+				{
+					var ".$selectcontents[1]." = sel.options[sel.selectedIndex].value;
+					document.getElementById('".$selectcontents[0]."').options.length = 0;
+					if(".$selectcontents[1].".length>0){
+						ajax.requestFile = '".$this->scriptajax."?".$selectcontents[1]."='+".$selectcontents[1].";
+                        ajax.onLoading = whenLoading();
+						ajax.onCompletion = create".$selectcontents[0].";	// funcion para ejecutar
+						ajax.runAJAX();
+					}
+				}
+
+				function create".$selectcontents[0]."()
+				{
+					var obj = document.getElementById('".$selectcontents[0]."');
+					eval(ajax.response);
+                ";
+                if ($this->images) {
+                echo "
+                    var imageform = document.getElementById('".$this->idimageform."'); 
+                    imageform.innerHTML = '<img src=\"images/".$this->imageform."\" border=\"0\" align=\"right\">';";
+                }
+				echo"
+                }
+				";
+			}
+		}
+        echo "
+        function whenLoading(){
+        ";
+        if ($this->images) {
+		      echo "
+              var imageform = document.getElementById('".$this->idimageform."'); 
+              imageform.innerHTML = '<img src=\"images/".$this->imageformajax."\" border=\"0\" align=\"right\">';";
+        }
+        echo "
+            }
+        </script>\n";		
+	}	
+
+        /**
+        * Retorna el nombre de un campo si se ha cambiado en base al numero de campo
+        */     
+    function getnombresbyid($i) {
+        if($this->newname!=NULL){
+            foreach ($this->newname as $clave => $value) {		
+                if ($clave==$this->nombres[$i]){
+                    $namecamp = "$value";
+                }
+            }
+        } 
+        if ($namecamp == '') {
+            $namecamp=$this->nombres[$i];
+        }
+        return $namecamp;
+    }
+    
+        /**
+        * Retorna el id de un campo en base al nombre de campo
+        */     
+    function gettheidbyname($name) {
+        $idcamp = array_keys($this->nombres, $name);
+        if ($idcamp[0] == '') {
+            return false;
+        }
+        return $idcamp[0];
+    }    
+    
+        /**
+        * Imprime el formulario en pantalla, funcion final y definitiva, usar antes del final
+        */ 
+	function showform() {		// muestra el formualrio
+        global $db;
+        
+        $colspann=$this->columns;
+			
+		if ($this->open) {	// si habre el form	
+			if($this->printjavascript) {	// si hay javascript creado
+				$javascripaction="onSubmit=\"return validar".$this->formname."(this)\"";
+			} else {
+				$javascripaction="";				
+			}		
+			// si es un formulario tipo file activa en enctype correcto
+			if ($this->whataction != NULL) {
+				$actioon=$this->whataction;
+			} else {
+				$actioon=$_SERVER["PHP_SELF"];
+			}
+			if ($this->autocomplete) {
+				$moreform="autocomplete=\"off\"";
+			} else {
+				$moreform="";
+			}
+            if ($this->fileform!=NULL) {
+                    echo "<form name=\"".$this->formname."\" id=\"".$this->formid."\" $javascripaction action=".$actioon." ".$moreform." enctype=\"multipart/form-data\" method=\"POST\">";                        
+            } else {
+                    echo "<form name=\"".$this->formname."\" id=\"".$this->formid."\" $javascripaction action=".$actioon." ".$moreform." method=\"POST\">";
+            }
+            echo "\n<table id=\"table_results\" align=\"center\" class=\"".$this->styletable."\"><tbody>\n"; // encabezado tabla
+			echo "<tr>\n" ;		// aca inicia la tabla con un formulario para ingresar campos            
+			echo "<td valign=\"top\" colspan=\"$colspann\" class=\"".$this->styleheader."\">";
+            if ($this->images) {
+                echo "<div id=\"".$this->idimageform."\"><img src=\"images/".$this->imageform."\" border=\"0\" align=\"right\"></div>";
+            }
+            echo "<div align=\"center\">".$this->title."&nbsp;</div></td>\n";		// aca son los encabezados de la tabla, los nopmbre s de los campos id=\"".$this->formid."\"
+			echo "</tr>\n";
+		}
+		
+		$dates=0; // para enumerar los calendarios
+		$columnss=0;
+        
+		for ($i = 0; $i < $this->nocampos; $i++) {  // en este for arma el formulario
+			$ordermore=""; 
+			$doopentr=FALSE;
+			$makearray=FALSE;
+			
+            if($this->submiteds != NULL){
+                foreach ($this->submiteds as $value) {		// marco si debo mostrar como diligenciado 
+                    if ($value == $this->nombres[$i]){
+                        $fstyleforms="".$this->styleformsubmited."\" id=\"".$this->nombres[$i]."";
+                        $sreadonly = "READONLY";
+                        break;
+                    } else {
+                        $fstyleforms=$this->styleforms;
+                        $sreadonly = "";
+                    }
+                }
+            } else {
+                $fstyleforms=$this->styleforms;
+            }
+            
+            if($this->stylesubmited) { // cambia el estilo si esta activo style forms
+                $fstyleforms=$this->styleformsubmited;
+            }
+                
+            if ($columnss==0) {	// para establecer si imprime TR o no
+				$doopentr=TRUE;
+			}
+
+            $namecamp=$this->getnombresbyid($i); // si reemplazo el nombre
+            $namecamp=str_replace('_', ' ', $namecamp);            
+
+			$dynamiclist="";
+			if($this->dynamiclist!=NULL){
+				foreach ($this->dynamiclist as $value) {		// marco si debe armar el javascript de dynamic list   ************
+					if ($value==$this->nombres[$i]){
+						$dynamiclist = " id=\"".$this->nombres[$i]."\" onkeyup=\"ajax_showOptions(this,'get".$this->nombres[$i]."',event)\"";
+					}
+				}
+			}
+			
+			$showhtml=FALSE;
+			if($this->showashtml!=NULL){
+				foreach ($this->showashtml as $value) {		// marco si debo mostrar como html 
+					if ($value==$this->nombres[$i]){
+						$showhtml = TRUE;
+					}
+				}
+			}	
+						
+			$endl=FALSE;
+			if(($this->endl!=NULL) AND !($this->columns == ($columnss+1))){
+				foreach ($this->endl as $value) {		// marco si debo mostrar como html 
+					if ($value==$this->nombres[$i]){
+						$endl = TRUE;
+					}
+				}
+			}
+			
+			$orderselect=FALSE;
+			if($this->orderselect!=NULL){
+				foreach ($this->orderselect as $clave => $value) {		// si debo ordenar select cargo la variable de ordenación
+					if ($clave==$this->nombres[$i]){
+						$orderselect = $value;
+					}
+				}
+			}
+								
+			$defaultvalues=NULL;
+			$selected="";
+			if($this->defaultvalue!=NULL){
+				foreach ($this->defaultvalue as $clave => $value) {		// cargo valore defecto 
+					if ($clave==$this->nombres[$i]){
+						$selected=$value;
+						if (($this->variable[$i]=="text") OR ($this->variable[$i]=="mediumtext") OR ($this->variable[$i]=="longText") OR((($this->variable[$i]=="varchar" || $this->variable[$i]=="char")) AND $this->tamanovariable[$i] > 150) OR $showhtml OR $showhtmlblock){
+							$defaultvalues = "$value";							
+						} else {
+							$defaultvalues = "value=\"$value\"";
+						}
+					}
+				}
+			}
+
+			$hiddenform=FALSE;
+			if($this->hiddenform!=NULL){
+				foreach ($this->hiddenform as $value) {		// cargo valor a hidden en form
+					if ($value==$this->nombres[$i]){
+						$hiddenform = "$value";
+					}
+				}
+			}
+            
+			if($this->bigtitle!=NULL){
+				foreach ($this->bigtitle  as $clave => $value) {		// si se establece un gran titulo
+					if ($clave==$this->nombres[$i]){
+                        $faltan=$this->columns-$columnss;
+						if ($faltan > 0) { // cierro tds pendientes
+							$columnss=0;
+							$doopentr=TRUE;						
+							echo "<td colspan=\"$faltan\"></td>\n";
+						}                      
+                        echo "</tr>\n<tr class=\"".$this->styleheader."\">\n";
+						echo "<td valign=\"top\" colspan=\"$colspann\">\n";
+						echo "$value";  
+						echo "</td>";
+                        $columnss=0;
+                        $doopentr=TRUE;						
+                        echo "</tr>\n";
+					}
+				}
+			}  
+            
+			$showhtmlblock=FALSE;
+			if($this->showashtmlblock!=NULL){
+				foreach ($this->showashtmlblock as $value) {		// marco si debo mostrar como html 
+					if ($value==$this->nombres[$i]){
+						$showhtmlblock = TRUE;
+                        $faltan=$this->columns-$columnss;
+						if ($faltan > 0) { // cierro tds pendientes
+							$columnss=0;
+							$doopentr=TRUE;						
+							echo "<td colspan=\"$faltan\"></td>\n";
+						}                      
+                        echo "</tr>\n<tr class=\"".$this->stylerow."\">\n";
+                        $blanco="style=\"background-color: #ffffff;\" colspan=\"".$this->columns."\"";
+                        $columnss=$this->columns;
+                        $doopentr=FALSE;
+					}
+				}
+			}
+			
+            if($this->variable[$i]=="mediumtext" OR $this->variable[$i]=="longText"){
+                        $faltan=$this->columns-$columnss;
+						if ($faltan > 0) { // cierro tds pendientes
+							$columnss=0;
+							$doopentr=TRUE;						
+							echo "<td colspan=\"$faltan\"></td>\n";
+						}                      
+                        echo "</tr>\n<tr class=\"".$this->stylerow."\">\n";
+                        $blanco="style=\"background-color: #ffffff;\" colspan=\"".$this->columns."\"";
+                        $columnss=$this->columns;
+                        $doopentr=FALSE;
+			} else {
+                if (!$showhtmlblock) {
+					$blanco="";
+				}
+            }      
+			
+			if($this->commentsbefore!=NULL){
+				foreach ($this->commentsbefore  as $clave => $value) {		// valores de info antes
+					if ($clave==$this->nombres[$i]){
+						if ($doopentr) {
+							echo "<tr  class=\"".$this->stylerow."\">\n";
+						}
+						echo "<td valign=\"top\">\n";
+						echo "$value";  
+						echo "</td>";
+						$columnss++;
+						if ($columnss>=$this->columns) {
+							$columnss=0;
+							$doopentr=TRUE;						
+							echo "</tr>\n";
+						} else {
+							$doopentr=FALSE;
+						}
+					}
+				}
+			}
+			$sreadonly = "";							
+			if ($sreadonly == '') {
+                $primaryauto = FALSE;
+                if($this->readonly!=NULL){
+                    foreach ($this->readonly as $readonly) {		// activo bandera si es read only
+                        if ($readonly==$this->nombres[$i]){
+                            if ($this->primarykeyauto==$this->nombres[$i]) { // si es por llave primaria
+                                $primaryauto = TRUE;
+                            } else {		// si es de cheveres
+                                $sreadonly = "READONLY";							
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if($this->stylesubmited) { // forza readonly si esta cargado estilo de solo lectura
+                $sreadonly = "READONLY";
+            }
+				            
+                
+			$hiddencamp = FALSE;
+			if ($this->hiddencamp!=NULL) {
+				foreach ($this->hiddencamp as $hidden) {		// activo bandera de llave primaria autocrementable
+					if ($hidden==$this->nombres[$i]){
+						$hiddencamp = TRUE;
+						if ($hiddenform) {		// si crea un hidden
+							echo "<input type=\"hidden\" name=\"".$this->nombres[$i]."\" $defaultvalues>";
+						} 	
+					}
+				}
+			}
+
+            // revisa si tiene que hacer aun array de formularios
+			if($this->itemsarrayname!=NULL){
+				foreach ($this->itemsarrayname  as $clave => $value) {		// valores de info antes
+					if ($value==$this->nombres[$i]){
+						$makearray=$clave; // guardo el nombre del array de formularios
+					}
+				}
+			}
+            
+             if ($makearray) {
+                    $faltan=$this->columns-$columnss;
+                    if ($faltan > 0) { // cierro tds pendientes
+                        $columnss=0;
+                        $doopentr=TRUE;						
+                        echo "<td colspan=\"$faltan\"></td>\n";
+                    }                      
+                    echo "</tr>\n<tr class=\"".$this->styleheader."\">\n";
+                    if ($this->itemsarraytitle[$makearray] != '') {  // si existe algun titulo 
+                        echo "<td valign=\"top\" colspan=\"$colspann\">\n";
+                        echo $this->itemsarraytitle[$makearray];  
+                        echo "</td></tr>";
+                    }
+                    
+                    echo "<tr  class=\"".$this->stylerow."\">\n";
+                    echo "<td valign=\"top\" colspan=\"$colspann\">\n";
+                    // contador de items en la tabla
+                    echo "<input type=\"hidden\" name=\"cont_".$makearray."\" id=\"cont_".$makearray."\" value=\"1\"><input type=\"hidden\" name=\"deleted_".$makearray."\" id=\"deleted_".$makearray."\" value=\"\"><input type=\"hidden\" name=\"values_".$makearray."\" id=\"values_".$makearray."\" value=\"\">\n";
+                    
+                    echo "<table align=\"center\" id=\"tabla_".$makearray."\" class=\"".$this->styletable."\">"; // armo la tabla de los items
+                    
+                    $campos=explode(',', $this->itemsarraycamps[$makearray]);
+                    
+                    echo "<tr class=\"".$this->styleheader."\">\n";
+                    $firstdata=0;
+                    foreach($campos AS $campo) { // recorro los campos
+                        $id=$this->gettheidbyname($campo); 
+                        $namecamp=$this->getnombresbyid($id); // si reemplazo el nombre
+                        $namecamp2=str_replace('_', ' ', $namecamp);
+                        echo "<th><small>".$namecamp2."</small></th>";   
+                        if($firstdata == 0){ // utikl bandera del id del primer campo
+                           $firstdata=$this->getxmlidbyname($namecamp); 
+                        }                        
+                    }
+                    if ($this->itemsarraymore[$makearray]) { // si tiene que agregar más campos
+                        echo "<th><a href='javascript: dynamicTable".$makearray."addrow()'><b><small>[+]</small></b></a></th>";
+                    }
+                    echo "</tr>";
+                    
+                    echo "<tr id='table_row_".$makearray."_1' class=\"".$this->stylerow."\">\n";
+                    
+                    $valorescargados=count($this->defaultvaluetab[$firstdata]);
+
+                    if ($valorescargados == 1){ // noramliza la cantidad pra el for
+                        $valorescargados=0;
+                    } else if ($valorescargados > 1){
+                        $valorescargados--;
+                    }
+                    for($c=0; $c <= $valorescargados; $c++) {
+                        foreach($campos AS $campo) { // recorro los campos
+                            echo "<td valign=\"top\" NOWRAP>";
+                            $id=$this->gettheidbyname($campo); // saco el id
+                            $texttt=FALSE;
+                            
+							if ($this->formulas != '')  {
+								foreach ($this->formulas as $clave => $value) {
+									$idqty=$this->gettheidbyname($value['qty']); // saco el id de qty
+									$idtotalcamp=$this->gettheidbyname($value['totalcamp']); // saco el id de totalcamp
+									$idunitario=$this->gettheidbyname($clave); // saco el id de unitario
+									if ($id == $idqty) {
+										$toformu="onChange=\"makemul".$makearray."(this, '".$clave."', '".$value['totalcamp']."', 1)\"";
+									} else if ($id == $idtotalcamp) {
+										$toformu="readonly";
+									} else if ($id == $idunitario) {
+										$toformu="onChange=\"changeunitary".$makearray."('".$value['qty']."', '".$value['totalcamp']."', 1)\"";
+									}
+								}
+							} else {
+								$toformu="";
+							}
+							
+                            $defaultvalues=NULL;
+                            $selected="";
+                            
+                            if($this->submiteds!=NULL){
+                                foreach ($this->submiteds as $valube) {		// marco si debo mostrar como diligenciado 
+                                    if ($valube==$this->nombres[$id]){
+                                        $fstyleforms="".$this->styleformsubmited."\" id=\"".$this->nombres[$id]."";
+                                        $sreadonly = "READONLY";
+                                        break;
+                                    } else {
+                                        $fstyleforms=$this->styleforms;
+                                        $sreadonly = "";
+                                    }
+                                }
+                            } else {
+                                $fstyleforms=$this->styleforms;
+                            }
+                            
+                            if($this->stylesubmited) { // cambia el estilo si esta activo style forms
+                                $fstyleforms=$this->styleformsubmited;
+                            }                            
+
+                            if($this->defaultvaluetab!=NULL){ // si carga valores por defecto
+                                $sreadonly = "READONLY";
+                                $idxml=$this->getxmlidbyname($campo);
+                                $defaultvaluesx=$this->defaultvaluetab[$idxml][$c];
+                        
+                                if (($this->variable[$id]=="text")OR((($this->variable[$id]=="varchar" || $this->variable[$id]=="char")) AND $this->tamanovariable[$id] > 150)){
+                                    $defaultvalues = "$defaultvaluesx";							
+                                } else {
+                                    $defaultvalues = "value=\"$defaultvaluesx\"";
+                                }
+
+                            }                            
+                            
+                            if ($this->nulo[$id]=='YES'){  	// Para poner la marca de asterisco
+                                echo "";
+                            } else {
+                                echo "*";			
+                            }	                        
+                            
+                            if ($this->variable[$id]=="text") {		// si es campo de texto
+                                echo "<textarea class=\"".$fstyleforms."\" rows=5 cols=26 name=\"".$this->nombres[$id]."[]\" id=\"".$this->nombres[$id]."_1\" $sreadonly>$defaultvalues</textarea>\n";
+                            } else if ($this->variable[$id]=="date") {		// si es campo de fecha
+                                echo "<input class=\"".$fstyleforms."\" type=\"text\" name=\"".$this->nombres[$id]."[]\" id=\"".$this->nombres[$id]."_1\" size=10 maxlength=\"10\" $sreadonly $defaultvalues>&nbsp;<small>(AAAA-MM-DD)</small>\n ";
+                                
+                            } else if ($this->variable[$id]=="bigint" OR $this->variable[$id]=="float") {  // si es lagun tipo de entero
+                            
+                                echo "<input class=\"".$fstyleforms."\" type=\"text\" name=\"".$this->nombres[$id]."[]\" id=\"".$this->nombres[$id]."_1\" size=\"12\" maxlength=\"".$this->tamanovariable[$id]."\" $sreadonly $toformu $defaultvalues>\n";
+                                
+                            } else if ($this->variable[$id]=="int" OR $this->variable[$id]=="smallint") {  // si es lagun tipo de entero
+                            
+                                echo "<input class=\"".$fstyleforms."\" type=\"text\" name=\"".$this->nombres[$id]."[]\" id=\"".$this->nombres[$id]."_1\" size=\"6\" maxlength=\"".$this->tamanovariable[$id]."\" $sreadonly $toformu $defaultvalues>\n";
+                                
+                            } else if ($this->variable[$id] == "tinyint") {  // si es lagun tipo de entero
+                            
+                                echo "<input class=\"".$fstyleforms."\" type=\"text\" name=\"".$this->nombres[$id]."[]\" id=\"".$this->nombres[$id]."_1\" size=\"2\" maxlength=\"".$this->tamanovariable[$id]."\" $sreadonly $toformu $defaultvalues>\n";
+                                
+                            } else if ($this->variable[$id]=="binary") {  // si es un booleano
+                                if ($defaultvalues=="value=\"1\"") {
+                                    $defaultvalues="checked";
+                                    $selectedd1="checked";
+                                } else {
+                                    $defaultvalues="";
+                                    $selectedd2="checked";
+                                }	
+                                echo "&nbsp;&nbsp;<input type=\"checkbox\" id=\"".$this->nombres[$id]."_1\" name=\"".$this->nombres[$id]."[]\" value=\"1\" $sreadonly $defaultvalues>\n";
+                            } else if ($this->variable[$id]=="double") {
+                                echo "<input class=\"".$fstyleforms."\" type=\"text\" id=\"".$this->nombres[$id]."_1\" name=\"".$this->nombres[$id]."[]\" size=\"10\" maxlength=\"22\" $sreadonly  $toformu $defaultvalues>\n";
+                            } else if ($this->variable[$id]=="varchar" || $this->variable[$id]=="char") {  // si es algun tipo de texto                       
+                                    if ($this->tamanovariable[$id] < 8) {
+                                        $sizecampo = 8;
+                                    } else if ($this->tamanovariable[$id] < 40) {
+                                        $sizecampo = 16;
+                                    } else if ($this->tamanovariable[$id] > 150 AND $this->tamanovariable[$id] < 200) {
+                                        $texttt=TRUE;
+                                        $sizecampo = 2;
+                                    } else if ($this->tamanovariable[$id] > 199) {
+                                        $texttt=TRUE;
+                                        $sizecampo = 3;
+                                    } else {
+                                        $sizecampo = 20;
+                                    }
+                                    if ($texttt) {
+                                        echo "<textarea class=\"".$fstyleforms."\" rows=$sizecampo cols=26 id=\"".$this->nombres[$id]."_1\" name=\"".$this->nombres[$id]."[]\" $sreadonly>$defaultvalues</textarea>\n";
+                                    } else {
+                                    
+                                        if ($this->tamanovariable[$i]=='66') {
+                                            echo "<input class=\"".$fstyleforms."\" type=\"password\" id=\"".$this->nombres[$id]."_1\" name=\"".$this->nombres[$id]."[]\" size=\"10\" maxlength=\"20\" $sreadonly $defaultvalues>\n";
+                                        } else {
+                                            echo "<input class=\"".$fstyleforms."\" type=\"text\" id=\"".$this->nombres[$id]."_1\" name=\"".$this->nombres[$id]."[]\" size=\"$sizecampo\" maxlength=\"".$this->tamanovariable[$id]."\" $sreadonly $defaultvalues>\n";							
+                                        }
+                                    }
+                                }
+                                echo "</td>\n";
+                            }
+                        
+                        if ($this->itemsarraymore[$makearray]) { // si tiene que agregar más campos
+                            echo "<td><a href='javascript: dynamicTable".$makearray."removerow(1)'><small><b>[-]</b></small></a></td>";
+                        }
+                        echo "</tr>\n";
+                    }
+                    echo "</table>"; // cierro la tabla de los items
+                    echo "</td>";
+                    $columnss=0;
+                    $doopentr=TRUE;						
+                    echo "</tr>\n";                 
+                 
+			 } else if (!$hiddencamp) {	// si el campo NO es oculto
+
+				$javascript="";
+				if($this->javascript!=NULL){
+					foreach ($this->javascript as $clave => $value) {		// cargo valor a hidden en form
+						if ($clave==$this->nombres[$i]){
+							$javascript = $value;
+						}
+					}
+				}
+                
+                if ($this->activesubmited != NULL) {
+                    if ($this->activesubmited == $this->nombres[$i]){
+						$javascript .= " onchange=\"activeSubmited()\"";
+					}                    
+                }
+			
+				$moreinfo="";
+				if($this->moreinfo!=NULL){
+					foreach ($this->moreinfo as $clave => $value) {		// cargo informacion adicional
+						if ($clave==$this->nombres[$i]){
+							$moreinfo = $value;
+						}
+					}
+				}	
+                
+				$multiple=FALSE;
+				if($this->multiples!=NULL){
+					foreach ($this->multiples as $clave) {		// cargo informacion de select multiples
+						if ($clave==$this->nombres[$i]){
+							$multiple = TRUE;
+						}
+					}
+				}
+                                
+				$firstvalueselect="";
+				if($this->firstvalueselect!=NULL){
+					foreach ($this->firstvalueselect as $clave => $value) {		// unvalor paraun primer select
+						if ($clave==$this->nombres[$i]){
+							$firstvalueselect = $value;
+						}
+					}
+				}
+                                
+				$fileform=FALSE;
+				if($this->fileform!=NULL){
+					foreach ($this->fileform as $clave) {		// si es un menu file
+						if ($clave==$this->nombres[$i]){
+							$fileform = TRUE;
+						}
+					}
+				}                                
+
+				$preselectv="";
+				if($this->depselectv!=NULL){		// si hay un menu depselect virtual
+					foreach ($this->depselectv as $depselect) {
+						$selectcontents = explode (',', $depselect);
+						if ($selectcontents[0]==$this->nombres[$i]){
+                            
+                            $defaultvalues2=NULL;
+                            $selected2="";
+                            if($this->defaultvalue!=NULL){
+                                    foreach ($this->defaultvalue as $clave => $value) {		// cargo valore defecto
+                                            if ($clave==$selectcontents[1]){
+                                                    $selected2=$value;
+                                            }
+                                    }
+                                }
+                                                        
+							$preselectv="$selectcontents[1]"; // nombre del preselect
+							
+							if ($doopentr) {
+								echo "<tr  class=\"".$this->stylerow."\">\n";
+							}
+							echo "<td valign=\"top\"> * $preselectv $moreinfo\n";
+                            // si esta configurada alguna ordenación
+                            if ($orderselect) {
+                               $ordermore="ORDER BY $orderselect"; 
+                            }
+							$infotablev = $db->get_results("SELECT $selectcontents[2] AS data1, $selectcontents[3] AS data2 FROM $selectcontents[1] $ordermore");
+							
+							$selectmakedv="<br /><select class=\"".$fstyleforms."\" $javascript id=\"$selectcontents[1]\" onchange=\"get".$this->nombres[$i]."(this)\" name=\"$selectcontents[1]\">".$firstvalueselect."\n";
+
+							if ($defaultvalues==NULL) {
+								$selectmakedv .= "<option value=\"\">...</option>\n";
+							} else {			// si esta editano un campo virtual entonces saca el valor reacioenado
+
+								if($this->selects!=NULL){
+									foreach ($this->selects as $selectbar) {		// activo bandera de selectmake 
+											$selectcontentsx = explode (',', $selectbar);
+										if ($selectcontentsx[0]==$this->nombres[$i]){
+											$selectcontents4=$selectcontentsx[2];
+										}
+									}
+								}
+								$datatablee = $db->get_row("SELECT  $selectcontents[1].$selectcontents[2] AS data1, $selectcontents[1].$selectcontents[3] AS data2 FROM `$selectcontents[0]`
+								LEFT JOIN $selectcontents[1] ON $selectcontents[0].$selectcontents[2] = $selectcontents[1].$selectcontents[2] 
+								WHERE `$selectcontents4` = '$selected' $ordermore");
+								$selectmakedv = "$selectmakedv"."<option value=\"".$datatablee->data1."\">".$this->wordCut($datatablee->data2, $this->wordcut, '...')."</option>\n";
+							}
+				
+							foreach ($infotablev as $datatable) {		// aca creo los menus
+                                                                if($datatable->data1==$selected2){	// si existe uncampo por defecto para un select
+									$selectedd="selected=\"selected\" style=\"font-weight: bold\"";
+								} else {
+									$selectedd="";
+								}
+								$selectmakedv = "$selectmakedv"."<option $selectedd value=\"".$datatable->data1."\">".$this->wordCut($datatable->data2, $this->wordcut, '...')."</option>\n";
+							}
+							$selectmakedv="$selectmakedv"."</select>\n";
+							echo "$selectmakedv\n";
+							
+							$columnss++;
+							if ($columnss>=$this->columns OR $endl) {
+								$columnss=0;
+								$doopentr=TRUE;						
+								echo "</tr>\n";
+							} else {
+								$doopentr=FALSE;
+							}
+						}
+					}
+				}
+
+				$preselectr2="";
+				$preselectr="";
+				$flechita="";
+				if($this->depselectr!=NULL){		// si hay un menu depselect real
+					foreach ($this->depselectr as $depselect) {
+						$selectcontents = explode (',', $depselect);
+						if ($selectcontents[0]==$this->nombres[$i]){
+							$preselectr="id=\"$selectcontents[0]\" onchange=\"get".$selectcontents[3]."(this)\""; // nombre del preselect
+							$flechita="  ";
+						}
+						if ($selectcontents[3]==$this->nombres[$i]){
+							$preselectr2="$selectcontents[0]";
+							
+						}
+					}
+				}
+				
+				$selectmakepre = FALSE;
+				
+				if($this->reqselect!=NULL){		// si hay un menu reqselect
+					foreach ($this->reqselect as $depselect) {
+						$selectcontents = explode (',', $depselect);
+						if ($selectcontents[1]==$this->nombres[$i]){
+							$masajax=" onchange=\"get".$selectcontents[0]."(this)\""; // nombre del preselect
+							$flechita=" ";
+						}
+						if ($selectcontents[0]==$this->nombres[$i]){
+							$selectmakepre = TRUE;
+							$ii=$this->getidbyname($selectcontents[1]); // obtengo el verdadero nombre
+							$namecamp2=$this->getnombresbyid($ii); // si reemplazo el nombre
+							$namecamp2=str_replace('_', ' ', $namecamp2); 
+							$selectmakedpre ="<select class=\"".$fstyleforms."\" $javascript id=\"".$this->nombres[$i]."\" name=\"".$this->nombres[$i]."\">".$firstvalueselect."<option value=\"\">".$this->textselected." ".$namecamp2."...</option></select>\n";
+						}
+					}
+				}			
+				
+				$makeslide=FALSE;
+				if($this->setslider != NULL){		// si hay slide activo
+					foreach($this->setslider as $clave => $value) {
+						if ( $value==100) {
+							$perce=" %";
+						} else {
+							$perce="";
+						}
+						if ($clave==$this->nombres[$i]){
+						$makeslide = "
+						<style type=\"text/css\">
+							div.slider_".$clave." {
+								width: 230px;
+								height: 23px;
+								background: url(images/slider.png) 0 center repeat-x;
+							}
+							div.slider_".$clave." div.knob_".$clave." {
+								background-image: url(images/slider-handle.gif);	
+								width: 12px;
+								height: 23px;
+							}
+						</style>
+						<div id=\"slider_".$clave."\" class=\"slider_".$clave."\">
+							<div class=\"knob_".$clave."\">
+							</div>
+						</div>
+						<div id=\"sliderset_".$clave."\" style=\"display: inline;\"></div>$perce<input type=\"hidden\" id=\"".$this->nombres[$i]."\" name=\"".$this->nombres[$i]."\" $defaultvalues>
+							";
+						}
+					}
+				}			
+				
+				$selectmake = FALSE;
+				
+				if(($this->selects!=NULL) AND !$selectmakepre){
+					foreach ($this->selects as $selectbar) {		// activo bandera de selectmake 
+						$selectcontents = explode (',', $selectbar);
+						if ($selectcontents[0]==$this->nombres[$i]){
+						
+							$radio = FALSE;
+							if ($this->radios!=NULL) {
+								foreach ($this->radios as $radioss) {		// activo bandera convertir selec a radio
+									if ($radioss==$this->nombres[$i]){
+										$radio = TRUE;
+									}
+								}
+							}	
+                            
+							$checkbox = FALSE;
+							if ($this->checkboxs!=NULL) {
+								foreach ($this->checkboxs as $checkboxss) {		// activo bandera convertir selec a grupo de checkbox
+									if ($checkboxss==$this->nombres[$i]){
+										$checkbox = TRUE;
+									}
+								}
+							}
+
+							$subfilter='';
+                            
+							if ($selectcontents[4] != '' AND $selectcontents[5] != '') {		// si hay filtros para el subselect
+								$subfilter=" WHERE $selectcontents[4] = '$selectcontents[5]'";					
+							}
+                            
+                            if ($selectcontents[6] != '') {
+                                    $subfilter.=" OR $selectcontents[4] = '$selectcontents[6]' "; // si hay mas sublfitros
+                            }
+
+                            //s i hay un filtro sobreescribe subfileter o crea
+							if ($this->selectsfilter[$this->nombres[$i]] != '') {
+                                $subfilter=" WHERE ".$this->selectsfilter[$this->nombres[$i]]." ";
+                            }
+                            
+							$DISCTIN=FALSE;
+                            // si exite alguna orden pra el select
+                            if ($orderselect) {
+                               $ordermore="ORDER BY $orderselect"; 
+                            }
+							if ($selectcontents[4] != '' AND $selectcontents[5] == '') {		// si hay filtros para el subselect
+								$infotable = $db->get_results("SELECT DISTINCT($selectcontents[2]) AS data1, $selectcontents[3] AS data2 FROM $selectcontents[1] $subfilter $ordermore");
+								$DISCTIN=TRUE;
+							} else {
+								$infotable = $db->get_results("SELECT $selectcontents[2] AS data1, $selectcontents[3] AS data2 FROM $selectcontents[1] $subfilter  $ordermore");			
+							}
+							
+							$corchete='';
+							$multiplehtml='';
+							if ($multiple){ // si es un select multiple
+								$corchete='[]';
+								$multiplehtml='multiple';
+							}		
+							
+							if (!$radio AND !$checkbox) {
+								if ($preselectv!=''){ // por si es de una carga por defecto
+									$selectmaked="<br /><select $multiplehtml class=\"".$fstyleforms."\" $javascript $preselectr id=\"".$this->nombres[$i]."$corchete\" name=\"".$this->nombres[$i]."\">".$this->wordCut($firstvalueselect, $this->wordcut, '...')."\n";
+								} else {
+									$selectmaked="<br /><select $multiplehtml class=\"".$fstyleforms."\" $javascript $preselectr name=\"".$this->nombres[$i]."$corchete\">".$this->wordCut($firstvalueselect, $this->wordcut, '...')."\n";							
+								}
+								
+								if ($infotable) {
+									foreach ($infotable as $datatable) {		// aca creo los menus
+										if ($corchete!='') { // si es un select multiple rastrea un array
+											if (is_array($selected)) { // si es verdaderamente array
+												if (in_array($datatable->data1, $selected)) { // si esta el valor
+													$selectedd="selected=\"selected\" style=\"font-weight: bold\"";
+												} else {
+													$selectedd="";
+												}
+											} else {
+												if ($datatable->data1==$selected){	// si existe uncampo por defecto para un select
+													$selectedd="selected=\"selected\" style=\"font-weight: bold\"";
+												} else {
+													$selectedd="";
+												}
+											}                                                                             
+										} else if ($datatable->data1==$selected){	// si existe uncampo por defecto para un select
+											$selectedd="selected=\"selected\" style=\"font-weight: bold\"";
+										} else {
+											$selectedd="";
+										}
+										if ($sreadonly=='READONLY') {		// si es de solo lectura muestra solo el campo en cuestion
+											if ($selectedd!='') {
+												$selectmaked .="<option $selectedd value=\"".$datatable->data1."\">".$this->wordCut($datatable->data2, $this->wordcut, '...')."</option>\n";
+											}
+										
+										} else {
+											if ($DISCTIN) {
+												if ($last==$datatable->data2) { // hack pra el filtro DISTINCT
+													
+												} else {
+													$selectmaked .="<option $selectedd value=\"".$datatable->data1."\">".$this->wordCut($datatable->data2, $this->wordcut, '...')."</option>\n";							
+													$last=$datatable->data2;			
+												}									
+											} else {
+												$selectmaked .="<option $selectedd value=\"".$datatable->data1."\">".$this->wordCut($datatable->data2, $this->wordcut, '...')."</option>\n";
+											}							
+										}
+									}
+								}
+								$selectmaked.="</select>\n";
+							
+							} else if (!$radio AND $checkbox) {  // si va a armar grupos de checkbox
+                            
+                                if($this->guidance[$this->nombres[$i]]=='vertical') {
+                                    $selectmaked="<br />";  
+                                    $salto="<br />";   
+                                } else {
+                                    $selectmaked="|"; 
+                                    $salto="|";
+                                }
+								foreach ($infotable as $datatable) {
+									if (is_array($selected)) { // si es verdaderamente array
+										if (in_array($datatable->data1, $selected)) { // si esta el valor
+											$selectedd="checked";
+										} else {
+											$selectedd="";
+										}	
+									} else {
+										if($datatable->data1==$selected){	// si existe uncampo por defecto para un select
+											$selectedd="checked";
+										} else {
+											$selectedd="";
+										}	
+									}   						
+									if ($sreadonly=='READONLY') {		// si es de solo lectura muestra solo el campo en cuestion
+										if ($selectedd!='') {
+											$selectmaked .= "<input type=\"checkbox\" name=\"".$this->nombres[$i]."[]\" value=\"".$datatable->data1."\" $selectedd>".$datatable->data2." $salto";
+										}
+									} else {
+										$selectmaked .="<input type=\"checkbox\" name=\"".$this->nombres[$i]."[]\" value=\"".$datatable->data1."\" $selectedd>".$datatable->data2." $salto";
+									}	
+								}	    
+                            
+                            } else { // si va a armar radios
+                            
+                                if($this->guidance[$this->nombres[$i]]=='vertical') {
+                                    $selectmaked="<br />";  
+                                    $salto="<br />";   
+                                } else {
+                                    $selectmaked="|"; 
+                                    $salto="|";
+                                }
+								if ($infotable) {
+									foreach ($infotable as $datatable) {
+										if($datatable->data1==$selected){	// si existe uncampo por defecto para un select
+											$selectedd="checked";
+										} else {
+											$selectedd="";
+										}								
+										if ($sreadonly=='READONLY') {		// si es de solo lectura muestra solo el campo en cuestion
+											if ($selectedd!='') {
+												$selectmaked .= "<input type=\"radio\" name=\"".$this->nombres[$i]."\" value=\"".$datatable->data1."\" $selectedd>".$datatable->data2." $salto";
+											}
+										} else {
+											$selectmaked .="<input type=\"radio\" name=\"".$this->nombres[$i]."\" value=\"".$datatable->data1."\" $selectedd>".$datatable->data2." $salto";
+										}								
+									}							
+								}
+							}
+							$selectmake = TRUE;
+						}
+					}
+				}
+							
+				if ($doopentr) {
+                    echo "<tr class=\"".$this->stylerow."\">\n";
+				}
+
+				if ($this->nulo[$i]=='YES'){  	// Para poner la marca de asterisco
+					$startd = "<td $blanco valign=\"top\" NOWRAP>$flechita".$namecamp." $moreinfo\n";
+				} else {
+					$startd = "<td $blanco valign=\"top\" NOWRAP>* $flechita".$namecamp." $moreinfo\n";			
+				}	
+
+				if ($primaryauto) {		// si es una llave primaria autoincrementable no imprime formulario 
+				
+					echo "".$startd."".$this->keyinfo."\n";
+					if ($hiddenform) {		// si crea un hidden
+						echo "<input type=\"hidden\" name=\"".$this->nombres[$i]."\" $defaultvalues>";
+					} 
+					
+				} else if ($makeslide) {		// si hizo un slide
+					echo "".$startd."$makeslide";		
+					
+				} else if ($selectmake) {		// si hizo un select
+					echo "".$startd."$selectmaked";
+	
+				} else if ($fileform) {		// si hizo un file form
+					echo "".$startd."<br /><input class=\"".$fstyleforms."\" name=\"".$this->nombres[$i]."\" type=\"file\" id=\"".$this->nombres[$i]."\" $sreadonly $dynamiclist $defaultvalues>";
+	
+				} else if ($selectmakepre) {		// si hizo un select pre
+					echo "".$startd."<br />$selectmakedpre";
+	
+				} else if ($preselectv!="") {		// si depende de ajax con campo virtual
+					$ii=$this->getidbyname($preselectv);
+					if ($ii == '') {
+						$namecamp2=$preselectv; // si reemplazo el nombre
+					} else {
+						$namecamp2=$this->getnombresbyid($ii); // si reemplazo el nombre
+					}
+					$namecamp2=str_replace('_', ' ', $namecamp2); 
+					echo "".$startd."<br /><select class=\"".$fstyleforms."\" $masajax id=\"".$this->nombres[$i]."\" name=\"".$this->nombres[$i]."\">\n";
+					echo "".$firstvalueselect."<option value=\"\">".$this->textselected." ".$namecamp2."...</option>\n";
+					echo "</select>\n";
+					
+				} else if ($preselectr2!="") {		// si depende de ajax con campo real
+					$ii=$this->getidbyname($preselectr2);
+					$namecamp2=$this->getnombresbyid($ii); // si reemplazo el nombre
+					$namecamp2=str_replace('_', ' ', $namecamp2); 
+					echo "".$startd."<br /><select class=\"".$fstyleforms."\" $masajax id=\"".$this->nombres[$i]."\" name=\"".$this->nombres[$i]."\">\n";
+					echo "".$firstvalueselect."<option value=\"\">".$this->textselected." ".$namecamp2."...</option>\n";
+					echo "</select>\n";
+					
+				} else if ($this->variable[$i]=="text") {		// si es campo de texto
+					if (!$showhtml AND !$showhtmlblock) {
+						echo "".$startd."<br /><textarea class=\"".$fstyleforms."\" $javascript rows=6 cols=30 name=\"".$this->nombres[$i]."\" $dynamiclist $sreadonly>$defaultvalues</textarea>\n";
+					} else {
+						echo "".$startd."$defaultvalues";
+					}
+				} else if ($this->variable[$i]=="date") {		// si es campo de fecha
+					$dates++;
+					echo "".$startd."<br /><input class=\"".$fstyleforms."\" type=\"text\" $javascript id=\"date$dates\" name=\"date$dates\" size=10 maxlength=\"10\" $sreadonly $defaultvalues>";
+                    if ($sreadonly=='') {		// si no es solo lectura muestra el calendario
+                        echo "<img src=\"images/b_calendar.png\" id=\"caldate$dates\" border=\"1\" title=\"Calendario\" onmouseover=\"this.style.background='red';\" onmouseout=\"this.style.background=''\" />&nbsp;&nbsp;<small>(AAAA-MM-DD)</small>\n ";
+                    }
+					
+				} else if ($this->variable[$i]=="bigint" OR $this->variable[$i]=="float") {  // si es lagun tipo de entero
+				
+					echo "".$startd."<br /><input class=\"".$fstyleforms."\" $javascript type=\"text\" name=\"".$this->nombres[$i]."\" size=\"12\" maxlength=\"".$this->tamanovariable[$i]."\" $sreadonly $dynamiclist $defaultvalues>\n";
+					
+				} else if ($this->variable[$i]=="int" OR $this->variable[$i]=="smallint") {  // si es lagun tipo de entero
+				
+					echo "".$startd."<br /><input class=\"".$fstyleforms."\" $javascript type=\"text\" name=\"".$this->nombres[$i]."\" size=\"6\" maxlength=\"".$this->tamanovariable[$i]."\" $sreadonly $dynamiclist $defaultvalues>\n";
+					
+				} else if ($this->variable[$i]=="tinyint") {  // si es lagun tipo de entero
+				
+					echo "".$startd."<br /><input class=\"".$fstyleforms."\" $javascript type=\"text\" name=\"".$this->nombres[$i]."\" size=\"2\" maxlength=\"".$this->tamanovariable[$i]."\" $sreadonly $dynamiclist $defaultvalues>\n";
+					
+				} else if ($this->variable[$i]=="binary") {  // si es un booleano
+					if ($defaultvalues=="value=\"1\"") {
+						$defaultvalues="checked";
+						$selectedd1="checked";
+					} else {
+						$defaultvalues="";
+						$selectedd2="checked";
+					}				
+					$radio = FALSE;
+					if ($this->radios!=NULL) {
+						foreach ($this->radios as $radioss) {		// activo bandera convertir selec a radio
+							if ($radioss==$this->nombres[$i]){
+								$radio = TRUE;
+							}
+						}
+					}
+					if (!$radio) {	// si es un checkbox	
+						echo "<td $blanco valign=\"top\">";
+						if ($this->nulo[$i]=='YES'){  	// Para poner la marca de asterisco
+							$startd2 = "$flechita".$namecamp." $moreinfo\n";
+						} else {
+							$startd2 = "* $flechita".$namecamp." $moreinfo\n";			
+						}	
+						echo "<input $javascript type=\"checkbox\" name=\"".$this->nombres[$i]."\" value=\"1\" $sreadonly $dynamiclist $defaultvalues>".$startd2."&nbsp;&nbsp;\n";
+					} else {	// si es un radio
+						echo "".$startd."&nbsp;&nbsp;|<input $javascript type=\"radio\" name=\"".$this->nombres[$i]."\" value=\"1\" $selectedd1> Si |<input type=\"radio\" name=\"".$this->nombres[$i]."\" value=\"0\" $selectedd2> No";
+					
+					}					
+				} else if ($this->variable[$i]=="double") {
+					echo "".$startd."<br /><input class=\"".$fstyleforms."\" $javascript type=\"text\" name=\"".$this->nombres[$i]."\" size=\"10\" maxlength=\"22\" $sreadonly $dynamiclist $defaultvalues>\n";
+				} else if ($this->variable[$i]=="varchar" || $this->variable[$i]=="char") {  // si es algun tipo de texto
+					if (!$showhtml AND !$showhtmlblock) {
+						$texttt=FALSE;
+						if ($this->tamanovariable[$i] < 8) {
+							$sizecampo = 8;
+						} else if ($this->tamanovariable[$i] < 40) {
+							$sizecampo = 16;
+						} else if ($this->tamanovariable[$i] > 150 AND $this->tamanovariable[$i] < 200) {
+							$texttt=TRUE;
+							$sizecampo = 2;
+						} else if ($this->tamanovariable[$i] > 199) {
+							$texttt=TRUE;
+							$sizecampo = 3;
+						} else {
+							$sizecampo = 33;
+						}
+						if ($texttt) {
+							echo "".$startd."<br /><textarea class=\"".$fstyleforms."\" $javascript rows=$sizecampo cols=30 name=\"".$this->nombres[$i]."\" $sreadonly>$defaultvalues</textarea>\n";
+						} else {
+						
+							if ($this->tamanovariable[$i]=='66') {
+								echo "".$startd."<br /><input class=\"".$fstyleforms."\" $javascript type=\"password\" name=\"".$this->nombres[$i]."\" size=\"10\" maxlength=\"20\" $sreadonly $defaultvalues>\n";
+							} else {
+								echo "".$startd."<br /><input class=\"".$fstyleforms."\" $javascript type=\"text\" name=\"".$this->nombres[$i]."\" size=\"$sizecampo\" maxlength=\"".$this->tamanovariable[$i]."\" $sreadonly $dynamiclist $defaultvalues>\n";							
+							}
+						}
+					} else {
+						echo "".$startd."$defaultvalues";
+					}
+
+				} else if ($this->variable[$i]=="mediumtext") { // fatla fomralizar editor html
+                    if (!$this->yawysiwyg) { // si no se ha includo el path lo incluyo
+                        echo "".$startd."<script language=\"JavaScript\" type=\"text/javascript\" src=\"".$this->pathwysiwyg."\"></script>\n";
+                        $this->yawysiwyg=TRUE;
+                    } else {
+						echo "".$startd."";
+					}
+					echo "<br /><textarea name=\"".$this->nombres[$i]."\" id=\"".$this->nombres[$i]."\">$defaultvalues</textarea><script language=\"JavaScript\">generate_wysiwyg('".$this->nombres[$i]."');</script>\n";
+				} else if ($this->variable[$i]=="longText" OR $this->variable[$i]=="longtext") {
+							if ($this->columns > 2 ) {
+								$ssizze=96;
+							} else  {
+								$ssizze=70;
+							}
+							echo "".$startd."<br /><textarea class=\"".$fstyleforms."\" $javascript rows=5 cols=$ssizze name=\"".$this->nombres[$i]."\" $sreadonly>$defaultvalues</textarea>\n";
+				} else if ($this->variable[$i]=="time") {
+					echo "".$startd."<br /><input class=\"".$fstyleforms."\" type=\"text\" name=\"".$this->nombres[$i]."\" size=\"6\" maxlength=\"8\" $sreadonly $dynamiclist $defaultvalues>\n";
+				} else if ($this->variable[$i]=="datetime") {
+
+					$dates++;
+					$datestime[]=$dates;
+					echo "".$startd."<br /><input class=\"".$fstyleforms."\" $javascript type=\"text\" id=\"date$dates\" name=\"date$dates\" size=14 maxlength=\"17\" $sreadonly $defaultvalues><img src=\"images/b_calendar.png\" id=\"caldate$dates\" border=\"1\" title=\"Calendario\" onmouseover=\"this.style.background='red';\" onmouseout=\"this.style.background=''\" />&nbsp;&nbsp;<small>(AAAA-MM-DD 00:00)</small>\n ";
+				
+				} else {
+					echo "".$startd."".$this->variable[$i]." unknown";
+				}
+
+				echo "</td>\n";
+				$columnss++;  
+				if ($columnss>=$this->columns) {
+					$doopentr=TRUE;
+					$columnss=0;				
+					echo "</tr>\n";
+				} else {
+					$doopentr=FALSE;
+				}
+				
+				if($this->commentsafter!=NULL){
+					foreach ($this->commentsafter  as $clave => $value) {		// valores de info despues
+						if ($clave==$this->nombres[$i]){
+							if ($doopentr) {
+								echo "<tr  class=\"".$this->stylerow."\">\n";
+							}
+							echo "<td valign=\"top\">\n" ;
+							echo "$value";  
+							echo "</td>";
+							$columnss++;
+							if ($columnss>=$this->columns) {
+								$columnss=0;				
+								echo "</tr>\n";
+							}
+						}
+					}
+				}	
+			}
+			if ($endl) {
+				for ($ci=$columnss; $ci<$this->columns; $ci++) {
+					if ($ci==$this->columns) {
+						echo "<td valign=\"top\">\n" ;
+						echo "&nbsp;";  
+						echo "</td>";
+						echo "</tr>\n";																			
+					} else {
+						echo "<td valign=\"top\">\n" ;
+						echo "&nbsp;";  
+						echo "</td>";
+					}
+				}
+				$doopentr=TRUE;
+				$columnss=0;						
+			}			
+		}
+		if ($columnss!=0) {
+			for ($ci=$columnss; $ci<$this->columns; $ci++) {
+				if ($ci==$this->columns) {
+					echo "<td valign=\"top\">\n" ;
+					echo "&nbsp;";  
+					echo "</td>";
+					echo "</tr>\n";																			
+				} else {
+					echo "<td valign=\"top\">\n" ;
+					echo "&nbsp;";  
+					echo "</td>";
+				}
+			}	
+		}
+		
+		if ($this->close) {	// si cierra el form
+			echo "<tr class=\"".$this->stylefoother."\"><td  valign=\"top\" colspan=\"$colspann\"><img src=\"images/PoweredBytf.gif\" border=\"0\" align=\"right\" title=\"www.tecsua.com\"> ";
+			$this->infoboton=str_replace('_', ' ', $this->infoboton); 
+			echo "".$this->infoboton."";
+			if ($this->submit) {
+				echo "&nbsp;<input type=\"submit\" class=\"".$this->stylebutton."\" name=\"Action\" VALUE=\"".$this->namebutton."\">";
+			}				
+			echo "</td></tr>\n";
+			echo "</tbody>\n</table>\n";
+			echo "</form>\n\n";
+		}
+			// Codigo para activar calendarios si hay
+		if ($dates>0) {
+			echo "<script type=\"text/javascript\">\n";
+			for ($cc=1;$cc<=$dates;$cc++){
+				$timefrrr=FALSE;
+				if ($datestime!=''){
+					foreach ($datestime as $datestime2) {
+				 		if ($datestime2==$cc) {
+							$timefrrr=TRUE;
+				 		}					 	
+				 	}
+				}
+				if (!$timefrrr) {
+					echo "Calendar.setup({
+				        inputField     :    \"date$cc\",     // id of the input field
+				        ifFormat       :    \"%Y-%m-%d\",      // format of the input field
+				        button         :    \"caldate$cc\",  // trigger for the calendar (button ID)
+				        singleClick    :    true
+				    	});\n";
+				} else {
+					echo "Calendar.setup({
+				        inputField     :    \"date$cc\",     // id of the input field
+				        ifFormat       :    \"%Y-%m-%d %H:%M\",      // format of the input field
+				        button         :    \"caldate$cc\",  // trigger for the calendar (button ID)
+			                showsTime      :    true,
+				        timeFormat     :    \"24\",
+				        singleClick    :    true
+				    	});\n";
+				}
+			}
+			echo "</script>\n";
+		}
+				
+		if ($this->debug) {
+			echo "<br />names ";		
+			print_r($this->nombres);
+			echo "<br />vars ";				
+			print_r($this->variable);
+			echo "<br />size ";				
+			print_r($this->tamanovariable);
+			echo "<br />null ";				
+			print_r($this->nulo);	
+			echo "<br />readonly ";				
+			print_r($this->readonly);
+			echo "<br />defaults ";				
+			print_r($this->default);		
+		}
+	}
+
+/****************************** FUNCIONES DE RECEPCION / VALIDACIÓN / ALMACENAMIENTO DE DATOS ************************/
+
+        /**
+        * Recibe todo el grupo de variables POST definidas en un formulario y valida que esten correctamente diligenciadas,
+        * hace lo mismo y un poco más que la validacion javascript, retorna un Array campo -> valor si estubo correctamente
+        * diligenciado, si hubo errores retorna false
+        */ 
+	function RetreiveValidate() {
+       
+        $dates=1;
+		for ($i = 0; $i < $this->nocampos; $i++) {  // en este for recorre el formulariovalidarformz
+        
+			$makearray = FALSE;
+			$hiddencamp = FALSE;
+			$nombrecampo=$this->nombres[$i];
+			if ($this->hiddencamp!=NULL) {
+				foreach ($this->hiddencamp as $hidden) {	// busco si el campo es escondido no ceckeo validacion
+					if ($hidden==$this->nombres[$i]){
+						$hiddencamp = TRUE;	
+					}
+				}
+			}
+           /* 
+            $multiple=FALSE;
+            if($this->multiples!=NULL){
+                foreach ($this->multiples as $clave) {		// si es select multiple marco como si fuera hidden
+                    if ($clave==$this->nombres[$i]){
+                        $hiddencamp = TRUE;
+                    }
+                }
+            }
+           
+			if($this->showashtml!=NULL){
+				foreach ($this->showashtml as $value) {		// marco si debo mostrar como html es como si fuera hidden
+					if ($value==$this->nombres[$i]){
+						$hiddencamp = TRUE;
+					}
+				}
+			}
+   */  
+			if($this->fileform!=NULL){
+					foreach ($this->fileform as $clave) {		// si es un menu file
+							if ($clave==$this->nombres[$i]){
+									$hiddencamp = TRUE;
+							}
+					}
+			}  
+			$namecamp=$this->nombres[$i];
+			if($this->newname!=NULL){
+				foreach ($this->newname as $clave => $value) {		// si reemplazo el nombre
+					if ($clave==$this->nombres[$i]){
+						$namecamp = "$value";
+					}
+				}
+			}
+            
+			if($this->hiddenform!=NULL){
+				foreach ($this->hiddenform as $value) {		// si es hidden ignora
+					if ($value==$this->nombres[$i]){
+						$hiddencamp = TRUE;
+					}
+				}
+			}
+            
+            // revisa si tiene que hacer aun array de formularios
+			if($this->itemsarrayname!=NULL){
+				foreach ($this->itemsarrayname  as $clave => $value) {		// valores de info antes
+					if ($value==$this->nombres[$i]){
+						$makearray=$clave; // guardo el nombre del array de formularios
+					}
+				}
+			}
+			
+			if (($this->variable[$i]=="date" OR $this->variable[$i]=="datetime") & !$makearray) {		// si es campo de fecha y no esta dentro de un array!
+				$nombrecampo="date"."$dates";
+				$dates++;
+			}				
+                       
+            if ($makearray) {       // ALMACENA DATOS en array explotando variable oculta, por que los forms agergadps con AJAX no son detectados
+                
+                $nombrecampos=explode(',', $this->itemsarraycamps[$makearray]);
+                $varpost="values_".$makearray."";
+                $matriz=$_POST[$varpost];                         
+                $datass=explode($this->valuestr,$matriz);
+
+               foreach($datass AS $datas) { // recorro los datos tabulados
+                    if ($datas != '') { // si no esta vacio
+                        $data=explode($this->valuestd,$datas);
+                        $campos=count($data);
+                        //$campos--;
+                        for($b=0; $b < $campos; $b++){ // almaceno datos!
+                            $varform[$nombrecampos[$b]][]=$data[$b]; 
+                        }
+                    }
+                }                   
+                  
+			} else if (!$hiddencamp) {	// si el campo NO es oculto
+				if ($this->nulo[$i]!='YES'){  	// Para crear validacion de no nulo
+                        if ($_POST[$nombrecampo] == '' AND $this->variable[$i] != "binary") {
+                            echo "".$namecamp." ".$this->msgnonull."";
+                            return false;
+                        }
+				}
+                
+				if ($this->variable[$i]=="bigint" OR $this->variable[$i]=="int" OR $this->variable[$i]=="smallint" OR $this->variable[$i]=="tinyint") {// si es campo es entero
+				     if(!is_array($_POST[$nombrecampo])) {
+						$poruno=$_POST[$nombrecampo]*1; // OJO, FUE LA UNICA FORMA FACIL DE QUE ME VALIDARA SIEMPRE EL INT
+						if (!is_int($poruno) AND $_POST[$nombrecampo] != '') {
+							echo "".$this->msgnoint." ".$namecamp.".";
+							return false;
+						}
+					}
+				}
+             
+				if ($this->variable[$i]=="float" OR $this->variable[$i]=="double") {		// si es campo es flotante
+                    $poruno=$_POST[$nombrecampo]*1; // OJO, FUE LA UNICA FORMA FACIL DE QUE ME VALIDARA SIEMPRE EL FLOAT
+                    if (!is_int($poruno) AND !is_float($poruno) AND $_POST[$nombrecampo] != '') {
+                        echo "".$this->msgnofloat." ".$namecamp.".";
+                        return false;
+                    }
+				}
+
+				if ($this->nombres[$i]=='email' OR $this->nombres[$i]=='e-mail' OR $this->nombres[$i]=='mail') { // emails
+                    if (!$this->comprobar_email($_POST[$nombrecampo]) AND $_POST[$nombrecampo] != '') {
+                        echo "".$this->msgnomail." ".$namecamp.".";
+                        return false;
+                    }
+				}
+                
+                if (strlen($_POST[$nombrecampo]) < 1) {
+                    $varvalue=NULL;
+                } else {
+					if (!is_array($_POST[$nombrecampo])) {
+						$varvalue=$_POST[$nombrecampo];
+					} else {
+						$varvalue="-";
+						if (count($_POST[$nombrecampo]) == 1) { // si es solo un item no lo guarda como array
+							$varvalue=$_POST[$nombrecampo][0];	
+						} else {
+							foreach($_POST[$nombrecampo] AS $valein) {
+								$varvalue.="".$valein."-";
+							}
+						}
+					}
+                }
+                
+                $varform[$this->nombres[$i]]=$varvalue;                
+ 			}
+		}
+        return $varform;
+    }	
+
+        /**
+        * Crea un XML de datos con las variables POST diligenciadas mas el javascript getgroupidibyidvar
+        */ 
+    function MakeXmlData($datas){
+        
+        $xml="<data>";
+        $grupoactivo=false;
+        $idgroup=1;
+        foreach($datas AS $data => $value){ // recorro el array
+			$id=$this->getxmlidbyname($data); // armo tags de dato
+			$id2=$this->getidbyname($data); // armo tags de dato
+
+			if (!$idgroup2=$this->getgroupidibyname($data)){ 
+                if($grupoactivo) { // si hay grupo lo cierra
+                    $xml.="</group>"; 
+                    $grupoactivo=false;
+                }                
+
+                if($this->variable[$id2]=="mediumtext"){
+                    $xml.="<variable><id>$id</id><valor><![CDATA[$value]]></valor></variable>";             
+                } else {
+                    $xml.="<variable><id>$id</id><valor>$value</valor></variable>";             
+                }
+            
+            } else { // si hace parte de un grupo pues lo activa
+                if(!$grupoactivo) { // si grupo no esta activo
+                    $xml.="<group><id>$idgroup2</id>"; 
+                    $grupoactivo=true;
+                }
+				// si cambio de grupo entonces cierra el grupo y abre otro
+				if ($idgroup2 != $idgroup) {
+					$xml.="</group>"; 
+                    $xml.="<group><id>$idgroup2</id>";					
+				}
+				$idgroup=$idgroup2;
+				
+                foreach($value as $valuedearray){  // recorro el array de datos
+                        $xml.="<variable><id>$id</id><valor>$valuedearray</valor></variable>";                 
+                }
+            }
+        }
+        
+        if($grupoactivo) { // si hay grupo lo cierra
+            $xml.="</group>"; 
+            $grupoactivo=false;
+        }        
+        
+        $xml.="</data>";
+        return $xml;
+    }
+    
+        /**
+        * Si carga datos de un XML
+        */    
+    function ChargeXmlData($XMLCONTENT, $DOCGEN = TRUE){
+        
+        // oculto boton y cambio estilo
+        if ($DOCGEN) {
+            $this->stylesubmited=true;
+            $this->submit=false;
+            // cambiar esto despues por el id del grupo
+            $this->itemsarraymore[1]=false;
+        }
+
+        if ($xml = simplexml_load_string($XMLCONTENT)) {
+                // datos
+            if ($DOCGEN) {
+                foreach ($xml->data AS $data) { // recorro datos sueltos y cago valores
+                    foreach ($data->variable as $datos) {		// aca creo los arrays de caracteristicas
+                        $name=$this->getnamebyxmlid($datos->id);
+                        $this->setdefaultvalue($name,(string)$datos->valor);
+                    } 
+                    
+                    // datos de grupo
+                    foreach ($data->group AS $datagroup) { // recorro grupos y datos
+                    
+                        foreach ($datagroup->variable as $datos) {		// aca creo los arrays de caracteristicas
+                            
+                            $this->setdefaultvaluetab((string)$datos->id,(string)$datos->valor);
+                        }                          
+                    }                
+                }
+            } else {
+                foreach ($xml->variable as $datos) {		// aca creo los arrays de caracteristicas
+                    $name=$this->getnamebyxmlid($datos->id);
+					$selee=FALSE;
+					if($this->selects != NULL){ 
+						foreach ($this->selects as $selectbar) {		// activo bandera de select para enviar el array de valores 
+							$selectcontents = explode (',', $selectbar);
+							if ($selectcontents[0]==$name){
+								$selee=TRUE;
+							}
+						}
+					}
+					if ($selee) {
+						$valuess=explode('-',$datos->valor);
+						$this->setdefaultvalue($name,$valuess);
+					} else {						
+						$this->setdefaultvalue($name,(string)$datos->valor);
+					}
+                } 
+                
+                // datos de grupo
+                foreach ($xml->group AS $datagroup) { // recorro grupos y datos
+                
+                    foreach ($datagroup->variable as $datos) {		// aca creo los arrays de caracteristicas
+                        
+                        $this->setdefaultvaluetab((string)$datos->id,(string)$datos->valor);
+                    }                          
+                } 
+            }
+        } else {
+            echo "<b><font color=\"red\">Error cargando XML de datos</font></b>";
+        }   
+    }  
+     
+        /**
+        * comprueba un email
+        */    
+    
+    function comprobar_email($email){
+        $mail_correcto = 0;
+        //compruebo unas cosas primeras
+        if ((strlen($email) >= 6) && (substr_count($email,"@") == 1) && (substr($email,0,1) != "@") && (substr($email,strlen($email)-1,1) != "@")){
+           if ((!strstr($email,"'")) && (!strstr($email,"\"")) && (!strstr($email,"\\")) && (!strstr($email,"\$")) && (!strstr($email," "))) {
+              //miro si tiene caracter .
+              if (substr_count($email,".")>= 1){
+                 //obtengo la terminacion del dominio
+                 $term_dom = substr(strrchr ($email, '.'),1);
+                 //compruebo que la terminación del dominio sea correcta
+                 if (strlen($term_dom)>1 && strlen($term_dom)<5 && (!strstr($term_dom,"@")) ){
+                    //compruebo que lo de antes del dominio sea correcto
+                    $antes_dom = substr($email,0,strlen($email) - strlen($term_dom) - 1);
+                    $caracter_ult = substr($antes_dom,strlen($antes_dom)-1,1);
+                    if ($caracter_ult != "@" && $caracter_ult != "."){
+                       $mail_correcto = 1;
+                    }
+                 }
+              }
+           }
+        }
+        if ($mail_correcto) {
+           return 1;
+        } else {
+           return 0;
+        }
+     }
+}
+
+
+/**
+* objeto para envio de email
+
+* @authorJose Antonio Cely Saidiza <jose.cely@gmail.com>
+* @version 0.01
+* TODO: 
+* - Archivos adjutnos
+* - validacion de emails
+* - Documentar más a fondo
+*/
+class send_mail {
+
+	var $from;
+	var $recep;
+	var $recepcc;
+	var $recepbcc;
+	var $replyto;	
+	var $asunto;
+	var $mensaje;
+	var $titulo;
+	var $formato = TRUE;	
+	var $hasatach = FALSE;
+	var $atachfile;
+	
+
+        /**
+        * receptores de correo
+        * @param   string  $recep Receptor
+        */ 
+	function recep($recep) {
+		$this->recep[]=$recep;
+	}	
+
+        /**
+        *  receptores de correo copia
+        * @param   string  $recepcc Receptor copia
+        */
+	function recepcc($recepcc) {
+		$this->recepcc[]=$recepcc;
+	}	
+
+        /**
+        *  receptores de correo copiacoulta
+        * @param   string  $recepbcc Receptor copia oculta
+        */
+	function recepbcc($recepbcc) {	
+		$this->recepbcc[]=$recepbcc;
+	}	
+
+        /**
+        *  origen de email
+        * @param   string  $from Receptor copia oculta
+        */
+	function from($from) {
+		$this->from=$from;
+	}
+
+
+        /**
+        *  Asunto de email
+        * @param   string  $asunto Asunto de email
+        */
+	function asunto($asunto) {
+		$this->asunto=$asunto;
+	}
+		
+        /**
+        *  Mensaje de email
+        * @param   string  $mensaje Mensaje
+        */
+	function mensaje($mensaje) {
+		$this->mensaje=$mensaje;
+	}
+	
+	/**
+        *  Reply to
+        * @param   string  $replyto replyto
+        */
+        function replyto($replyto) {
+		$this->replyto=$replyto;
+	}
+	
+	/**
+        * Configurar como texto en vez de HTML por defecto
+        */        
+	function settext() {
+		$this->formato=FALSE;
+	}
+	
+	/**
+        * Configurar en cabezados para envio de adjuntos
+        */        
+	function hasatach($file) {
+		$this->hasatach=TRUE;
+		$this->atachfile=$file;
+	}
+
+	/**
+        * Titulo para el email, solo si es html
+        * @param   string  $titulo Tutulo
+        */
+	function settitulo($titulo) {
+		$this->titulo=$titulo;
+	}
+
+	/**
+        * envia email
+        */
+	function sendmailnow() {
+	
+		if ($this->titulo == '') {	// si no hay titulo estabece como titulo el email origen
+			$this->titulo=$this->from;
+		}
+
+		if ($this->replyto == '') {	// si no hay reply estabece como reply el from
+			$replyto="Reply-To: ".$this->from."\n";
+		} else {
+			$replyto="Reply-To: ".$this->replyto."\n";		
+		}
+		
+		if ($this->hasatach) { // si es con archivo adjunto
+		
+			$buffer = implode("", file($this->atachfile));				// Leer fichero
+			$buffer=chunk_split(base64_encode($buffer));		// Codificaci\Uffffffffn base64 y divido
+
+			// Cabeceras
+			$cabeceras = "MIME-version: 1.0\n";
+			$cabeceras .= "Content-type: multipart/mixed; ";
+			$cabeceras .= "boundary=\"Message-Boundary\"\n";
+			$cabeceras .= "Content-transfer-encoding: 7BIT\n";
+			$cabeceras .= "X-attachments: $this->atachfile";
+
+			// Mensaje
+			$mensaje = "--Message-Boundary\n";
+			$mensaje .= "Content-type: text/plain; charset=ISO-8859-1\n";
+			$mensaje .= "Content-transfer-encoding: 7BIT\n";
+			$mensaje .= "Content-description: Mail message body\n\n";
+
+			// Adjuntar el fichero
+			$mensaje .= "\n\n--Message-Boundary\n";
+			$mensaje .= "Content-type: Binary; name=\"$this->atachfile\"\n";
+			$mensaje .= "Content-Transfer-Encoding: BASE64\n";
+			$mensaje .= "Content-disposition: attachment; filename=\"$this->atachfile\"\n\n";
+			$mensaje .= "$buffer\n";
+			$mensaje .= "--Message-Boundary--\n";			
+			
+		} else if ($this->formato) {	// si es html
+			$cabeceras  = 'MIME-Version: 1.0' . "\n";
+			$cabeceras .= 'Content-type: text/html; charset=iso-8859-1' . "\n";
+			$mensaje='<html>
+<head>
+<title>'.$this->titulo.'</title>
+</head>
+<body>';
+			$mensaje .= $this->mensaje;
+			$mensaje .= '</body>
+</html>';
+		} else {
+			$cabeceras="";
+			$mensaje=$this->mensaje;			
+		}
+		
+		$recipients="";
+		$copys="";
+		$bccopys="";
+		$from="From: ".$this->from."\n";
+				
+		$recipientshtml="";
+
+		if($this->recep!=NULL){
+			foreach ($this->recep as $value) {		// si reemplazo el nombre
+				if ($recipientshtml==""){
+					$recipientshtml = 'To: '.$value.'';
+					$recipients = $value;					
+				} else {
+					$recipientshtml .= ', '.$value.'';
+					$recipients .= ', '.$value.'';													
+				}
+			}
+			$recipientshtml .= "\n";
+		} 
+
+		if($this->recepcc!=NULL){
+			foreach ($this->recepcc as $value) {		// si reemplazo el nombre
+				if ($copys==""){
+					$copys = 'Cc: '.$value.'';
+				} else {
+					$copys .= ', '.$value.'';				
+				}
+			}
+			$copys .= "\n";
+		} 
+
+		if($this->recepbcc!=NULL){
+			foreach ($this->recepbcc as $value) {		// si reemplazo el nombre
+				if ($bccopys==""){
+					$bccopys = 'Bcc: '.$value.'';
+				} else {
+					$bccopys .= ', '.$value.'';				
+				}
+			}
+			$bccopys .= "\n";
+		} 
+
+		// envia mail
+		//$cabeceras .= $recipientshtml;
+		$cabeceras .= $from;
+		$cabeceras .= $replyto;
+		$cabeceras .= $copys;
+		$cabeceras .= $bccopys;
+		$cabeceras .= "X-Mailer: PHP" . phpversion(); 
+		mail($recipients, $this->asunto, $mensaje, $cabeceras);
+	}	
+}
+
+?>

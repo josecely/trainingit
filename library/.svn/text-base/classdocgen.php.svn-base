@@ -1,0 +1,1422 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2007 Jose Antonio Cely Saidiza
+*  Email jose.cely@gmail.com
+*  Bogotá Colombia
+****************************************************************************/
+
+require_once('fpdf.php');
+require_once('barcode.php');
+
+require_once('classordencompra.php');
+require_once('classfacturaventa.php');
+require_once('classremision.php');
+require_once('classfacturaproveedor.php');
+
+// logistica
+require_once('classrelacionentrada.php');
+require_once('classordenpicking.php');
+require_once('classpacking.php');
+require_once('classcambiodatos.php');
+require_once('classreversa.php');
+require_once('classprestamo.php');
+require_once('classtrasladobodega.php');
+require_once('classajusteingreso.php');
+require_once('classingresotraslado.php');
+require_once('classnovedad.php');
+require_once('classsolicitudparte.php');
+
+class documento {
+
+	//var $cantidadnumeros = 7;
+	private $anoantes = TRUE;
+	protected $formatfecha = "j F Y h:i A";
+	private $Estadisticas=TRUE;
+	private $Activo = "";
+	private $Desactivo = " Documento Anulado";
+	
+	protected $id;
+	protected $Clase;
+        protected $Grupo;
+	protected $Subserie;
+	protected $Prefix;
+	protected $Formato;
+	protected $Fecha;
+	protected $Ciudad;
+	protected $Genera;
+	protected $Recibe;
+	protected $Impresiones;
+	protected $BloqImpresion;
+	protected $Bloqueado;
+	protected $Sede;
+        protected $Var0;
+	protected $Var1;
+	protected $Var2;
+	protected $Var3;
+	protected $Var4;
+	protected $Var5;
+	protected $Var6;
+	protected $Var7;		
+	protected $Contenido;
+	protected $Ultimaimpresion;
+	protected $Ultimaedicion;
+	protected $Estado;
+	// informacion Actores
+        protected $GeneraNombre1;
+        protected $GeneraNombre2;
+        protected $GeneraTipoidentificacion;
+        protected $GeneraIdentificacion;
+        protected $GeneraNumeroIdentificacion;
+        protected $Generaemail;
+        protected $GeneraTelefono;
+        protected $GeneraCiudad;
+        protected $GeneraCiudadNombre;
+        protected $GeneraDivisionNombre;
+        protected $GeneraDireccion;
+        protected $GeneraURLogo;
+        protected $GeneraWebsite;
+        protected $GeneraTipoActor;
+        protected $GeneraVar1;
+        protected $GeneraVar2;
+        protected $GeneraVar3;
+        protected $GeneraVar4;
+        protected $GeneraVar5;
+        protected $GeneraVar6;
+        
+        protected $RecibeNombre1;
+        protected $RecibeNombre2;
+        protected $RecibeTipoidentificacion;
+        protected $RecibeIdentificacion;
+        protected $RecibeNumeroIdentificacion;
+        protected $Recibeemail;
+        protected $RecibeTelefono;
+        protected $RecibeCiudad;
+        protected $RecibeCiudadNombre;
+        protected $RecibeDivisionNombre;
+        protected $RecibeDireccion;
+        protected $RecibeURLogo;
+        protected $RecibeWebsite;
+        protected $RecibeTipoActor;
+        protected $RecibeVar1;
+        protected $RecibeVar2;
+        protected $RecibeVar3;
+        protected $RecibeVar4;
+        protected $RecibeVar5;
+        protected $RecibeVar6;
+        
+        /// termina Actores
+	protected $Encabezado;
+	protected $EncabezadoSmall;
+	protected $Pie;
+	protected $PieSmall;
+	protected $Static1;
+	protected $Static2;
+	protected $Static3;
+	protected $Static4;
+	protected $Static5;	
+	
+	protected $styletable = 'tabledocumento';
+	protected $stylefoother = 'tabledocumentofoother';
+	protected $styleheader = 'tabledocumentoheader';
+	protected $stylecontent = 'tabledocumentocontent';
+	protected $titlesbig= "tilesdocumentobig";
+	protected $titlessmall= "tilesdocumentosmall";
+	protected $titlesmedium= "tilesdocumentomedium";
+	protected $styledoc = "documento";
+	protected $styledoc2 = "documento2";	
+	protected $styleborder = "tdborder";			
+	
+	protected $pdf;	
+	protected $Nombreclase;
+	protected $ahora;
+	protected $codigobarra;
+	protected $anodoc;
+	protected $Estadotext;
+	protected $nextId;
+	
+	private $barstyle=452;
+	private $barwidth=180;
+	private $barheight=50;
+	private $barxres=1;
+	private $barfont=1;
+
+	private $barname='bargen.png';
+
+	function __construct($tipodoc = null){
+		global $db;				
+		if ($tipodoc){
+			$this->Clase=$tipodoc;
+			$infodoc = $db->get_row("SELECT Nombre, Prefix, Formato, Encabezado, EncabezadoSmall, Pie, PieSmall, Static1, Static2, Static3, Static4, Static5 FROM `Clasedoc` WHERE `id` = '".$tipodoc."'");
+			$this->Nombreclase=$infodoc->Nombre;
+			$this->Prefix=$infodoc->Prefix;
+			$this->Formato=$infodoc->Formato;
+			$this->Encabezado=$infodoc->Encabezado;
+			$this->EncabezadoSmall=$infodoc->EncabezadoSmall;
+			$this->Pie=$infodoc->Pie;
+			$this->PieSmall=$infodoc->PieSmall;
+			$this->Static1=$infodoc->Static1;
+			$this->Static2=$infodoc->Static2;
+			$this->Static3=$infodoc->Static3;
+			$this->Static4=$infodoc->Static4;
+			$this->Static5=$infodoc->Static5;	
+			$cons2 = $db->get_var("SELECT MAX(id) AS max FROM `Documento`");	// saco el consecutivo siguiente
+			$cons2++;
+			$this->nextId=$cons2;	                        
+		} else {
+			$this->Nombreclase='No existente';
+			$this->Prefix='?';
+		}
+		$this->ahora=time();
+	}
+
+	public function seleccionadocumento($id) {		// carga documento
+		global $db;
+		
+		$sql="SELECT Clase, Grupo, Subserie, Fecha, Ciudad, Genera, Recibe, Impresiones, BloqImpresion, Bloqueado, Var0, Var1, Var2, Var3, Var4, Var5, Var6, Var7, Contenido, Ultimaimpresion, Ultimaedicion, Estado, Sede FROM `Documento` WHERE id = '".$id."'";
+		if ($documento = $db->get_row($sql)) {
+			$this->id=$id;
+			$this->Clase=$documento->Clase;
+                        $this->Grupo=$documento->Grupo;
+			$this->Subserie=$documento->Subserie;
+			$this->Fecha=$documento->Fecha;
+			$this->Ciudad=$documento->Ciudad;
+			$this->Genera=$documento->Genera;
+			$this->Recibe=$documento->Recibe;
+			$this->Impresiones=$documento->Impresiones;
+			$this->BloqImpresion=$documento->BloqImpresion;
+			$this->Bloqueado=$documento->Bloqueado;
+			$this->Sede=$documento->Sede;
+                        $this->Var0=$documento->Var0;
+			$this->Var1=$documento->Var1;
+			$this->Var2=$documento->Var2;
+			$this->Var3=$documento->Var3;
+			$this->Var4=$documento->Var4;
+			$this->Var5=$documento->Var5;
+			$this->Var6=$documento->Var6;
+			$this->Var7=$documento->Var7;						
+			$this->Var8=$documento->Var8;						
+			$this->Contenido=$documento->Contenido;
+			$this->Ultimaimpresion=$documento->Ultimaimpresion;
+			$this->Ultimaedicion=$documento->Ultimaedicion;			
+			$this->Estado=$documento->Estado;
+			$this->anodoc=date('Y', $this->Fecha);
+			if ($this->Estado){
+				$this->Estadotext="$this->Activo";
+			} else {
+				$this->Estadotext="$this->Desactivo";
+			}
+                        // cargo informacion de actores
+                        $sql2="SELECT `Nombre1` , `Nombre2` , Tipoidentificacion.Descripcion, `Identificacion` , `NumeroIdentificacion` , `email` , `Telefono` , `Ciudad` , Direccion, URLogo, Website, ciudad.nombre, `TipoActor`, Var1, Var2, Var3, Var4, Var5, Var6, division.nombre AS divisioname
+                        FROM `Actor`
+                        LEFT JOIN Tipoidentificacion ON Actor.Identificacion = Tipoidentificacion.id
+                        LEFT JOIN ciudad ON Actor.Ciudad = ciudad.id
+                        LEFT JOIN division ON ciudad.division = division.id
+                        WHERE Actor.id = '".$this->Recibe."'";
+                        if ($Recibeinfo = $db->get_row($sql2)) {
+                                $this->RecibeNombre1=$Recibeinfo->Nombre1;
+                                $this->RecibeNombre2=$Recibeinfo->Nombre2;
+                                $this->RecibeTipoidentificacion=$Recibeinfo->Descripcion;
+                                $this->RecibeIdentificacion=$Recibeinfo->Identificacion;
+                                $this->RecibeNumeroIdentificacion=$Recibeinfo->NumeroIdentificacion;
+                                $this->Recibeemail=$Recibeinfo->email;
+                                $this->RecibeTelefono=$Recibeinfo->Telefono;
+                                $this->RecibeCiudad=$Recibeinfo->Ciudad;
+                                $this->RecibeCiudadNombre=$Recibeinfo->nombre;
+                                $this->RecibeDivisionNombre=$Recibeinfo->divisioname;
+                                $this->RecibeDireccion=$Recibeinfo->Direccion;
+                                $this->RecibeURLogo=$Recibeinfo->URLogo;
+                                $this->RecibeWebsite=$Recibeinfo->Website;
+                                $this->RecibeTipoActor=$Recibeinfo->TipoActor;
+                                $this->RecibeVar1=$Recibeinfo->Var1;
+                                $this->RecibeVar2=$Recibeinfo->Var2;
+                                $this->RecibeVar3=$Recibeinfo->Var3;
+                                $this->RecibeVar4=$Recibeinfo->Var4;
+                                $this->RecibeVar5=$Recibeinfo->Var5;
+                                $this->RecibeVar6=$Recibeinfo->Var6;
+			}
+                        
+                        $sql3="SELECT `Nombre1` , `Nombre2` , Tipoidentificacion.Descripcion, `Identificacion` , `NumeroIdentificacion` , `email` , `Telefono` , `Ciudad` , Direccion, URLogo, Website, ciudad.nombre, `TipoActor`, Var1, Var2, Var3, Var4, Var5, Var6, division.nombre AS divisioname
+                        FROM `Actor`
+                        LEFT JOIN Tipoidentificacion ON Actor.Identificacion = Tipoidentificacion.id
+                        LEFT JOIN ciudad ON Actor.Ciudad = ciudad.id
+                        LEFT JOIN division ON ciudad.division = division.id
+                        WHERE Actor.id = '".$this->Genera."'";
+                        if ($Generainfo = $db->get_row($sql3)) {
+                                $this->GeneraNombre1=$Generainfo->Nombre1;
+                                $this->GeneraNombre2=$Generainfo->Nombre2;
+                                $this->GeneraTipoidentificacion=$Generainfo->Descripcion;
+                                $this->GeneraIdentificacion=$Generainfo->Identificacion;
+                                $this->GeneraNumeroIdentificacion=$Generainfo->NumeroIdentificacion;
+                                $this->Generaemail=$Generainfo->email;
+                                $this->GeneraTelefono=$Generainfo->Telefono;
+                                $this->GeneraCiudad=$Generainfo->Ciudad;
+                                $this->GeneraCiudadNombre=$Generainfo->nombre;
+                                $this->GeneraDivisionNombre=$Generainfo->divisioname;                                
+                                $this->GeneraDireccion=$Generainfo->Direccion;
+                                $this->GeneraURLogo=$Generainfo->URLogo;
+                                $this->GeneraWebsite=$Generainfo->Website;
+                                $this->GeneraTipoActor=$Generainfo->TipoActor;
+                                $this->GeneraVar1=$Generainfo->Var1;
+                                $this->GeneraVar2=$Generainfo->Var2;
+                                $this->GeneraVar3=$Generainfo->Var3;
+                                $this->GeneraVar4=$Generainfo->Var4;
+                                $this->GeneraVar5=$Generainfo->Var5;
+                                $this->GeneraVar6=$Generainfo->Var6;
+			}
+                                                
+			if ($this->anoantes) {
+				$ano="$this->anodoc"."-";
+			} else {
+				$ano='';
+			}
+
+			if (($id) < 10) {		// agrego ceros que hagan falta
+				$this->codigobarra="$ano"."000000"."$id";
+			} else if (($id) < 100) {
+				$this->codigobarra="$ano"."00000"."$id";
+			} else if (($id) < 1000) {
+				$this->codigobarra="$ano"."0000"."$id";
+			} else if (strlen($id) < 10000) {
+				$this->codigobarra="$ano"."00"."$id";
+			} else if (strlen($id) < 100000) {
+				$this->codigobarra="$ano"."0"."$id";
+			} else {
+				$this->codigobarra="$ano"."$id";
+			}
+
+			// cargo informacion de el tipo especifico del documento
+			$infodoc = $db->get_row("SELECT Nombre, Prefix, Formato, Encabezado, EncabezadoSmall, Pie, PieSmall, Static1, Static2, Static3, Static4, Static5 FROM `Clasedoc` WHERE `id` = '".$this->Clase."'");
+			$this->Nombreclase=$infodoc->Nombre;
+			$this->Prefix=$infodoc->Prefix;
+			$this->Formato=$infodoc->Formato;
+			$this->Encabezado=$infodoc->Encabezado;
+			$this->EncabezadoSmall=$infodoc->EncabezadoSmall;
+			$this->Pie=$infodoc->Pie;
+			$this->PieSmall=$infodoc->PieSmall;
+			$this->Static1=$infodoc->Static1;
+			$this->Static2=$infodoc->Static2;
+			$this->Static3=$infodoc->Static3;
+			$this->Static4=$infodoc->Static4;
+			$this->Static5=$infodoc->Static5;	
+			$cons2 = $db->get_var("SELECT MAX(id) AS max FROM `Documento`");	// saco el consecutivo siguiente
+			$cons2++;
+			$this->nextId=$cons2;	                      
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+	
+	public function seleccionadocumentosub($id) {		// carga documento por subserie
+		global $db, $sesion;
+                if ($cons=$db->get_var("SELECT id FROM `Documento` WHERE `Clase` = '".$this->Clase."' AND `Grupo` = '".$sesion->get_var('empresa')."' AND `Subserie` = '".$id."'")) {
+                        if ($this->seleccionadocumento($cons)) {
+                                return TRUE;
+                        } else {
+                                return FALSE;
+                        }
+                } else {
+                        return FALSE;
+                }
+        }
+        
+	protected function creardocumento($Grupo,$Contenido,$Genera,$Recibe,$Ciudad=0) {		// crear documento, solo consulto el ultimo serie
+		global $db;
+		if($this->Clase){	// si esxiste una clase
+                        $this->Grupo=$Grupo;
+			$cons = $db->get_var("SELECT MAX(Subserie) AS max FROM `Documento` WHERE `Clase` = '".$this->Clase."' AND `Grupo` = '".$this->Grupo."'");	// saco el consecutivo
+			$cons++;
+			$this->Subserie=$cons;
+			$cons2 = $db->get_var("SELECT MAX(id) AS max FROM `Documento`");	// saco el consecutivo
+			$cons2++;
+			$this->id=$cons2;			
+			$this->Fecha=time(); 	// establezco serie y hora, generador, receptor  y ciudad
+			$this->Genera=$Genera;
+			$this->Recibe=$Recibe;
+			$this->Ciudad=$Ciudad;			
+			$this->Contenido=$Contenido;
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+
+	protected function imprimirhtml($aumenta = TRUE) {	// imprimir documento en html
+		global $db;
+		if ($this->BloqImpresion) {
+			echo "Documento bloqueado para impresion";
+			return FALSE;		
+		} else if($this->id){
+			// creo el archivo de codigo barra type=C128B
+			$codigobarra = new C128BObject($this->barwidth, $this->barheight, $this->barstyle, $this->codigobarra);
+			$codigobarra->SetFont($this->barfont);   
+			$codigobarra->DrawObject($this->barxres);
+			$codigobarra->FlushObject($this->barname);
+			$fecha=date($this->formatfecha, $this->Fecha);
+			if ($this->Formato==1){
+				echo "<div class=\"$this->styledoc\">\n";
+			} else {
+				echo "<div class=\"$this->styledoc2\">\n";
+			}
+			echo "\n<table align=\"center\" class=\"".$this->styletable."\">\n"; // encabezado tabla"
+			if ($this->Formato==1){ 
+				echo "<tr class=\"$this->styleheader\"><td valign=\"top\"><div align=\"left\">";
+                                if ($this->Encabezado!='') {
+                                        echo "<div class=\"$this->titlesmedium\">$this->Encabezado</div>";
+                                }
+                                if ($this->GeneraURLogo!='') {
+                                        echo "<img src=\"$this->GeneraURLogo\" alt=\"$this->Encabezado\" border=\"0\"><br>";
+                                }
+			} else {
+				echo "<tr><td valign=\"top\">";	
+				echo "<div align=\"left\"><div class=\"$this->titlesmedium\">$this->Encabezado</div><br><br><br><div class=\"$this->titlesmedium\">&nbsp;&nbsp;Ref: $this->Nombreclase &nbsp;&nbsp;&nbsp;&nbsp;$this->Subserie $this->Estadotext</div><br><br><br>";						
+			}
+
+			if ($this->RecibeNombre1!=''){
+				echo "<b>SE&Ntilde;OR (ES):</b><br>";
+				echo "$this->RecibeNombre1 - $this->RecibeTipoidentificacion $this->RecibeNumeroIdentificacion";
+			}
+			echo "</div>";
+			echo "</td>\n";
+			
+			echo "<td valign=\"top\"><div align=\"right\"><img src=\"bargen.png\" title=\"".$this->codigobarra."\">&nbsp;&nbsp;&nbsp;&nbsp;<div class=\"$this->titlessmall\"><div align=\"right\">$fecha</div></div><div class=\"$this->titlesbig\">&nbsp;&nbsp;$this->Nombreclase &nbsp;&nbsp;$this->Subserie $this->Estadotext</div></div></td></tr>\n";
+			
+                        echo "<tr class=\"$this->styleheader\"><td colspan=\"2\" class=".$this->styleborder.">";
+                        echo "$this->GeneraNombre1 $this->GeneraNombre2 $this->GeneraTipoidentificacion $this->GeneraNumeroIdentificacion - $this->GeneraDireccion";
+			if ($this->EncabezadoSmall!='') {
+                                echo "<br>$this->EncabezadoSmall";
+			}
+                        echo "</td></tr>\n";
+			
+			if ($aumenta){		// si aumenta doc
+				$this->AumentaImpresion();
+			}
+			echo "</table>\n";
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+	
+	protected function generarHtml($aumenta = TRUE) {	// imprimir documento en html
+		global $db;
+		if ($this->BloqImpresion) {
+			echo "Documento bloqueado para impresion";
+			return FALSE;		
+		} else if($this->id)
+		{
+			$html = "";
+			$fecha=date($this->formatfecha, $this->Fecha);
+			if ($this->Formato==1){
+				$html.="<div class=\"$this->styledoc\">\n";
+			} else {
+				$html.="<div class=\"$this->styledoc2\">\n";
+			}
+			$html.="\n<table align=\"center\" class=\"".$this->styletable."\">\n"; // encabezado tabla"
+			if ($this->Formato==1){ 
+				$html.="<tr class=\"$this->styleheader\"><td valign=\"top\"><div align=\"left\">";
+                                if ($this->Encabezado!='') {
+                                        $html.="<div class=\"$this->titlesmedium\">$this->Encabezado</div>";
+                                }
+                                if ($this->GeneraURLogo!='') {
+                                        $html.="<br>";
+                                }
+			} else {
+				$html.="<tr><td valign=\"top\">";	
+				$html.="<div align=\"left\"><div class=\"$this->titlesmedium\">$this->Encabezado</div><br><br><br><div class=\"$this->titlesmedium\">&nbsp;&nbsp;Ref: $this->Nombreclase &nbsp;&nbsp;&nbsp;&nbsp;$this->Subserie $this->Estadotext</div><br><br><br>";						
+			}
+
+			if ($this->RecibeNombre1!=''){
+				$html.="<b>SEÑOR (ES):</b><br>";
+				$html.="$this->RecibeNombre1 - $this->RecibeTipoidentificacion $this->RecibeNumeroIdentificacion";
+			}
+			$html.="</div>";
+			$html.="</td>\n";
+			
+			$html.="<td valign=\"top\"><div align=\"right\">&nbsp;&nbsp;&nbsp;&nbsp;<div class=\"$this->titlessmall\"><div align=\"right\">$fecha</div></div><div class=\"$this->titlesbig\">&nbsp;&nbsp;$this->Nombreclase &nbsp;&nbsp;$this->Subserie $this->Estadotext</div></div></td></tr>\n";
+			
+                        $html.="<tr class=\"$this->styleheader\"><td colspan=\"2\" class=".$this->styleborder.">";
+                        $html.="$this->GeneraNombre1 $this->GeneraNombre2 $this->GeneraTipoidentificacion $this->GeneraNumeroIdentificacion - $this->GeneraDireccion";
+			if ($this->EncabezadoSmall!='') {
+                                $html.="<br>$this->EncabezadoSmall";
+			}
+                        $html.="</td></tr>\n";
+			
+			if ($aumenta){		// si aumenta doc
+				$this->AumentaImpresion();
+			}
+			$html.="</table>\n";
+			return $html;
+		} else {
+			return FALSE;
+		}
+	}
+	
+	protected function imprimirpdf($aumenta = TRUE) {	// imprimir documento en pdf
+		global $db;
+		if ($this->BloqImpresion) {
+			echo "Documento bloqueado para impresion";
+			return FALSE;		
+		} else if($this->id){
+
+			$fecha=date($this->formatfecha, $this->Fecha);
+
+			// creo el archivo de codigo barra type=C128B
+			$codigobarra = new C128BObject($this->barwidth, $this->barheight, $this->barstyle, $this->codigobarra);
+			$codigobarra->SetFont($this->barfont);   
+			$codigobarra->DrawObject($this->barxres);
+			$codigobarra->FlushObject($this->barname);	
+			$fecha=date($this->formatfecha, $this->Fecha);
+			
+			$this->pdf=new PDF();
+
+			$this->pdf->FPDF('P','mm','letter');
+			$this->pdf->AliasNbPages();
+			$this->pdf->AddPage();
+			$this->pdf->SetFillColor(252,239,128); // relleno amarillo
+			if ($this->Formato==1){
+				$this->pdf->Cell(0,30,'',1,1,'',1);
+			} else {
+				$this->pdf->Cell(0,50,'',1,1,'');			
+			}				
+			//regreso a esquina superior derecha
+			$this->pdf->SetXY(10, 10);
+			// Codigo barra
+			$this->pdf->Image($this->barname,155,11,46); // como es cero indico ancho de la imagen automatico
+			//	Arial bold 15	
+			
+			$this->pdf->SetFont('Arial','B',14);
+                        if ($this->Encabezado!='') {
+                                $this->pdf->Cell(0,10,$this->Encabezado,0,1,'L');
+                        }
+                    /*   if ($this->GeneraURLogo!='') {
+                                $this->pdf->Image($this->GeneraURLogo,15,20,60);       
+                        }*/
+
+                        $this->pdf->SetXY(10, 33);
+			if ($this->RecibeNombre1!='') {
+				$this->pdf->SetFont('Arial','B',8);
+				$this->pdf->Cell(0,3,'SEÑOR (ES):',0,1,'L');	
+				$this->pdf->SetFont('Arial','',8);
+				$this->pdf->Cell(0,3,''.$this->RecibeNombre1.' '.$this->RecibeNombre2.' '.$this->RecibeTipoidentificacion.' '.$this->RecibeNumeroIdentificacion.'',0,1,'L');	
+			}
+			
+			$this->pdf->SetXY(155, 25);
+			$this->pdf->SetFont('Arial','B',10);
+			$this->pdf->Cell(0,5,$fecha,0,1,'L');
+			// color rojo
+			$this->pdf->SetFont('Arial','B',16);
+			$this->pdf->SetTextColor(255,0,0);
+			$this->pdf->Cell(0,8,'  '.$this->Nombreclase.'  '.$this->Subserie.' '.$this->Estadotext.'',0,1,'R');
+			
+			$this->pdf->SetTextColor(0,0,0);                        
+			
+                        $this->pdf->SetXY(10, 40);
+			$this->pdf->SetFont('Arial','',8);
+			$this->pdf->Cell(0,4,''.$this->GeneraNombre1.' '.$this->GeneraNombre2.' '.$this->GeneraTipoidentificacion.' '.$this->GeneraNumeroIdentificacion.' - '.$this->GeneraDireccion.'',1,1,'C',1); 
+                        if ($this->EncabezadoSmall!='') {
+                             $this->pdf->Cell(0,4,$this->EncabezadoSmall,1,1,'C',1);   
+                        }			
+
+			if ($aumenta){		// si aumenta doc
+				$this->AumentaImpresion();
+			}
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+	
+	protected function imprimirodt($aumenta = TRUE) {	// imprimir documento open document
+		global $db;
+		if ($this->BloqImpresion) {
+			echo "Documento bloqueado para impresion";
+			return FALSE;		
+		} else if($this->id){
+		
+			if ($aumenta){		// si aumenta doc
+				$this->AumentaImpresion();
+			}
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+		
+	protected function imprimirtxt($aumenta = TRUE) {	// imprimir documento en txt
+		global $db;
+		if ($this->BloqImpresion) {
+			echo "Documento bloqueado para impresion";
+			return FALSE;		
+		} else if($this->id){
+
+			if ($aumenta){		// si aumenta doc
+				$this->AumentaImpresion();
+			}
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}		
+	
+	protected function imprimirticket($aumenta = TRUE) {	// imprimir documento en impresora de Ticket
+		global $db;
+		if ($this->BloqImpresion) {
+			echo "Documento bloqueado para impresion";
+			return FALSE;		
+		} else if ($this->id){
+			if ($aumenta){		// si aumenta doc
+				$this->AumentaImpresion();
+			}
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+
+	public function tipodocumento($barcode, $id = 0) {	// si se especifica un id de CLASE valida que sea el especificado, si no carga parcialmente documento
+		global $db;
+		
+		$barexplode = explode ('-', $barcode);
+		if (count($barexplode)==1) {
+			$bar=$barexplode[0]*1;		// multiplica por 1 para quitar ceros		
+		} else {
+			$bar=$barexplode[1]*1;
+		}
+		
+		if($id==0){	// si id es cero es para cargar info del tipo de documento
+			$sql="SELECT Documento.Clase, Documento.Subserie, Documento.Fecha, Documento.Estado, Clasedoc.Nombre 
+				FROM `Documento` 
+				LEFT JOIN Clasedoc ON Documento.Clase = Clasedoc.id WHERE Documento.id = '$bar'";		
+			if ($infodoc = $db->get_row($sql)){
+				$this->Clase=$infodoc->Clase;
+				$this->Subserie=$infodoc->Subserie;
+				$this->Fecha=$infodoc->Fecha;
+				$this->Estado=$infodoc->Estado;
+				$this->Nombreclase=$infodoc->Nombre;
+				return TRUE;
+			} else {
+				return FALSE;
+			}
+		} else {		// si id no es cero es para valida un documento
+			$iddoc = $db->get_var("SELECT Clase FROM `Documento` WHERE id = '".$bar."'");
+			if($iddoc == $id){
+				return TRUE;
+			} else {
+				return FALSE;
+			}
+		}
+	}
+		
+        public function tipodocumentosub($subserie, $id) {	// Se especifica un id de CLASE valida que sea el especificado, si no carga parcialmente documento
+		global $db;
+                // si id no es cero es para valida un documento
+                $iddoc = $db->get_var("SELECT Clase FROM `Documento` WHERE Subserie = '".$subserie."' AND Clase = '".$id."'");
+                if($iddoc == $id){
+                        return TRUE;
+                } else {
+                        return FALSE;
+                }
+	}
+        
+        public function CopiaDocumento() {   		// Copia documento cargado a uno nuevo, el nuevo estará todo desbloqueado y fecha actual
+		global $db;
+		
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			if ($this->id=='') {
+				return FALSE;
+			} else {
+				$cons = $db->get_var("SELECT MAX(Subserie) AS max FROM `Documento` WHERE `Clase` = '".$this->Clase."' AND `Grupo` = '".$this->Grupo."'");	// saco el consecutivo
+				$nevosubserie=$cons+1;
+				
+				$sql="INSERT INTO `Documento` (Clase, Grupo, Subserie, Fecha, Ciudad, Genera, Recibe, Var1, Var2, Var3, Var4, Var5, Var6, Var7, Contenido, Estado) VALUES ('".$this->Clase."', '".$this->Grupo."', '".$nevosubserie."', '".$this->ahora."', '".$this->Ciudad."', '".$this->Genera."', '".$this->Recibe."', '".$this->Var1."', '".$this->Var2."', '".$this->Var3."', '".$this->Var4."', '".$this->Var5."', '".$this->Var6."', '".$this->Var7."', '".$this->Contenido."', '".$this->Estado."')";
+				$db->query($sql);
+				$id = $db->get_var("SELECT MAX(id) AS max FROM `Documento`");	// saco el consecutivo
+				return $id;
+			}
+		}
+	}
+
+        /**
+        * Retorna la cantidad de Archivos de un Documento
+        */
+	function qtyimages() {
+                global $db, $urlimages;
+				  if (file_exists(''.$urlimages.'/'.$this->id.'')) {
+						$dp = opendir(''.$urlimages.'/'.$this->id.''); // recorro carpeta de imagenes
+						while ($files = readdir($dp)) {
+								$filename = basename($files);
+								if($filename != '.' && $filename != '..') {
+										$fileexplob = explode ('_', $filename);
+										//echo "$filename <br>";
+										if ($fileexplob[0] > 0 AND $fileexplob[0] < 1000){
+											$numeros[]=$fileexplob[0];  // escirbe el maxmo
+										}
+								}
+						}
+						if ($numeros == '') {
+							$maxnumber=0;
+						} else {
+							rsort($numeros);
+							$maxnumber=$numeros[0];
+						}
+						return $maxnumber;
+				} else {
+						return 0;
+				}
+	}
+	
+	/**
+	* Imprime links a los archivos adjuntos en pantalla
+	*/
+	
+	function listfilesdoc() {
+		global $db, $urlimages;
+		if (file_exists(''.$urlimages.'/'.$this->id.'')) {
+			$html3="<ul class=\"ulproduct\">\n";
+			$dp = opendir("".$urlimages."/".$this->id."/"); // recorro carpeta de XMLs
+			while ($files = readdir($dp))
+			{
+				if ($filecillo=fm_get_info($files)) {
+					$nombre=explode('_', $filecillo['name']);
+					$enpantalla='';
+					$qty=0;
+					foreach ($nombre AS $pantalla) {
+						$qty++;
+						if ($qty > 1 ) {
+							if ($enpantalla == '') {
+								$enpantalla.=$pantalla;
+							} else {
+								$enpantalla.="_".$pantalla."";
+							}
+						}
+					}
+					if ($nombre[0] != 'thumb') {
+						if ($filecillo['image'] == 'image') {
+							$html3.="<li><a target =\"_BLANK\" href=\"".$urlimages."/".$this->id."/".$filecillo['name']."\"><img src=\"".$urlimages."/".$this->id."/thumb_".$filecillo['name']."\" border=\"0\"> - ".$enpantalla."</a>\n";
+						} else {
+							$html3.="<li> <img src=\"images/".$filecillo['image'].".gif\" border=\"0\" width=\"12\" height=\"10\"> - <a target =\"_BLANK\" href=\"".$urlimages."/".$this->id."/".$filecillo['name']."\">".$enpantalla."</a>\n";							
+						}
+					}
+				}
+			}            
+			$html3.="</ul>\n";
+			return $html3;
+		} else {
+			return false;
+		}
+	}
+
+	public function EditaDocumento() {   		// Edita documento
+		global $db;
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {	
+			if ($this->id=='') {
+				return FALSE;
+			} else {
+				$Var3=str_replace("'","\'",$this->Var3);
+				$Var4=str_replace("'","\'",$this->Var4);
+				$Var5=str_replace("'","\'",$this->Var5);
+				$Var6=str_replace("'","\'",$this->Var6);
+				$Contenido=str_replace("'","\'",$this->Contenido);
+				
+				$sql="UPDATE `Documento` SET Grupo='".$this->Grupo."', Ciudad='".$this->Ciudad."', Genera = '".$this->Genera."', Recibe = '".$this->Recibe."', Var0 = '".$this->Var0."', Var1 = '".$this->Var1."', Var2 ='".$this->Var2."', Var3 = '".$Var3."', Var4 = '".$Var4."', Var5 = '".$Var5."', Var6 = '".$Var6."', Var7 = '".$this->Var7."', Contenido = '".$Contenido."', Estado = '".$this->Estado."', Ultimaedicion = '".$this->ahora."' WHERE `id` = '".$this->id."' LIMIT 1";
+				$db->query($sql);
+				return TRUE;
+			}
+		}
+	}
+	
+	public function DesactivaDocumento() {	// desactiva documento
+		global $db;
+		if($this->id){
+			$db->query("UPDATE `Documento` SET `Estado` = 0 WHERE `id` = '".$this->id."'");
+			$this->Estado=0;	
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+	
+	public function ActivaDocumento() {	// Activa documento
+		global $db;
+		if($this->id){
+			$db->query("UPDATE `Documento` SET `Estado` = 1 WHERE `id` = '".$this->id."'");
+			$this->Estado=1;	
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+				
+	public function Bloqueo() {	// establece estado de bloqueo de consulta
+		global $db;
+		if($this->id){
+			$db->query("UPDATE `Documento` SET `Bloqueado` = 1 WHERE `id` = '".$this->id."'");
+			$this->Bloqueado=1;	
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}	
+
+	public function DesBloqueo() {	// establece estado de bloqueo de consulta
+		global $db;
+		if($this->id){
+			$db->query("UPDATE `Documento` SET `Bloqueado` = 0 WHERE `id` = '".$this->id."'");
+			$this->Bloqueado=0;	
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+	
+	public function BloqueoImpresion() {	// establece estado de bloqueo de bloqueoimpresion
+		global $db;
+		if($this->id){
+			$db->query("UPDATE `Documento` SET `BloqImpresion` = 1 WHERE `id` = '".$this->id."'");
+			$this->BloqImpresion=1;	
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}	
+
+	public function DesbloqueoImpresion() {	// establece estado de bloqueo de bloqueoimpresion
+		global $db;
+		if($this->id){
+			$db->query("UPDATE `Documento` SET `BloqImpresion` = 0 WHERE `id` = '".$this->id."'");
+			$this->BloqImpresion=0;	
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+	
+	private function AumentaImpresion() {	// aumenta en uno la impresion
+		global $db;
+		if($this->id){
+			$db->query("UPDATE `Documento` SET `Impresiones` = (Impresiones+1), Ultimaimpresion = '".$this->ahora."' WHERE  `id` = '".$this->id."'");
+			$this->Impresiones = $db->get_var("SELECT Impresiones FROM `Documento` WHERE `id` = '".$this->id."'");
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+	
+	public function getNombreclase() {
+		return $this->Nombreclase;
+	}	
+        
+	public function getSede() {
+		return $this->Sede;
+	}	
+               
+	public function getIdclase() {
+		return $this->Clase;
+	}	
+        
+	public function getId() {
+		return $this->id;
+	}    
+    
+	public function getnextId() {
+		return $this->nextId;
+	}
+	// funciones de lectura de variables de documento cargado
+
+	public function getSubserie() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Subserie;
+		}
+	}
+        
+	public function getGrupo() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Grupo;
+		}
+	}	
+
+	public function getPrefix() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Prefix;		
+		}
+	}	
+
+	public function getFormato() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Formato;		
+		}
+	}
+	
+	public function getFecha() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Fecha;		
+		}
+	}	
+
+	public function getCiudad() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Ciudad;		
+		}
+	}	
+
+	public function getGenera() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Genera;		
+		}
+	}	
+
+	public function getRecibe() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Recibe;		
+		}
+	}
+	
+	public function getRecibeemail() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Recibeemail;		
+		}
+	}	
+	
+	public function getGeneraemail() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Generaemail;		
+		}
+	}	
+
+	public function getRecibeNombre1() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->RecibeNombre1;		
+		}
+	}
+        
+	public function getRecibeTelefono() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->RecibeTelefono;		
+		}
+	}
+        
+	public function getRecibeCiudadNombre() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->RecibeCiudadNombre;		
+		}
+	}
+        
+	public function getRecibeDivisionNombre() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->RecibeDivisionNombre;		
+		}
+	}
+        
+	public function getRecibeDireccion() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->RecibeDireccion;		
+		}
+	}
+
+        public function getRecibeNombre2() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->RecibeNombre2;		
+		}
+	}
+        
+	public function getGeneraNombre1() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->GeneraNombre1;		
+		}
+	}
+        
+	public function getGeneraCiudadNombre() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->GeneraCiudadNombre;		
+		}
+	}
+        
+	public function getGeneraDivisionNombre() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->GeneraDivisionNombre;		
+		}
+	}
+        
+	public function getGeneraTelefono() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->GeneraTelefono;		
+		}
+	}
+        
+	public function getGeneraDireccion() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->GeneraDireccion;		
+		}
+	}
+
+        public function getGeneraNombre2() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->GeneraNombre2;		
+		}
+	}        
+        
+	public function getImpresiones() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Impresiones;		
+		}
+	}	
+
+	public function getVar0() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Var0;		
+		}
+	}
+	
+	public function getVar1() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Var1;		
+		}
+	}	
+
+	public function getVar2() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Var2;		
+		}
+	}	
+
+	public function getVar3() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Var3;		
+		}
+	}	
+
+	public function getVar4() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Var4;		
+		}
+	}	
+
+	public function getVar5() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Var5;		
+		}
+	}	
+
+	public function getVar6() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Var6;		
+		}
+	}	
+
+	public function getVar7() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Var7;		
+		}
+	}	
+
+	public function getContenido() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Contenido;		
+		}
+	}
+
+	public function getUltimaimpresion() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Ultimaimpresion;		
+		}
+	}	
+
+	public function getUltimaedicion() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Ultimaedicion;		
+		}
+	}	
+
+	public function getEstado() {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			return $this->Estado;		
+		}
+	}	
+
+	// funciones de actualizacioon de daqtos del documento cargado, ojo esto no actualiza en la base de datos, solo en memoria mientras dura el objeto
+	
+	public function setPrefix($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Prefix=$value;
+		}
+	}
+		
+	public function setFormato($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Formato=$value;
+		}
+	}
+	
+	public function setGrupo($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Grupo=$value;
+		}
+	}
+	
+	public function setCiudad($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Ciudad=$value;
+		}
+	}
+		
+	public function setGenera($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Genera=$value;
+		}
+	}	
+
+	public function setRecibe($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Recibe=$value;
+		}
+	}	
+
+	public function setVar0($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Var0=$value;
+		}
+	}
+        
+	public function setVar1($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Var1=$value;
+		}
+	}	
+
+	public function setVar2($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Var2=$value;
+		}
+	}	
+
+	public function setVar3($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Var3=$value;
+		}
+	}	
+
+	public function setVar4($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Var4=$value;
+		}
+	}	
+
+	public function setVar5($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Var5=$value;
+		}
+	}	
+
+	public function setVar6($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Var6=$value;
+		}
+	}	
+
+	public function setVar7($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Var7=$value;
+		}
+	}	
+
+	public function setContenido($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Contenido=$value;
+		}
+	}	
+
+    //  funciones pra modificar temporalmente los encabezados y plantillas de la clase especifica del documento
+
+	public function setEncabezado($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Encabezado=$value;
+		}
+	}	
+
+	public function setEncabezadoSmall($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->EncabezadoSmall=$value;
+		}
+	}	
+
+	public function setPie($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Pie=$value;
+		}
+	}	
+
+	public function setPieSmall($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->PieSmall=$value;
+		}
+	}	
+	
+	public function setStatic1($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Static1=$value;
+		}
+	}	
+	
+	public function setStatic2($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Static2=$value;
+		}
+	}	
+	
+	public function setStatic3($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Static3=$value;
+		}
+	}	
+	
+	public function setStatic4($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Static4=$value;
+		}
+	}	
+	
+	public function setStatic5($value) {
+		if ($this->Bloqueado) {
+			return FALSE;
+		} else {
+			$this->Static5=$value;
+		}
+	}	
+
+}
+
+
+/**
+* Objeto con todo lo necesario para manejar una matriz de datos en texto
+* Es temporal mientras se implementa xml
+* @author Jose Antonio Cely Saidiza <jose.cely@gmail.com>
+* @version 0.01
+* TODO: 
+* - zxcv
+*/
+class arraydata {
+        
+        protected $arrdata;
+        protected $numrows;
+	protected $numcols; 
+
+	function Load($arrdata){  // inicializo variables del objeto si hay producto
+                $this->arrdata=$arrdata;
+	}
+
+        /**
+        * Inserta una columna de datos en el array
+        * @param    array   $data       columna de datos
+        */        
+	function insertdata($data) {
+                global $finalseparation, $separation;
+        
+                $data=str_replace("'","\'",$data); 
+                $columna='';
+                foreach ($data as $value) {
+                        if ($columna==''){
+                                $columna=$value;
+                        } else {
+                                $columna.="".$separation."".$value."";
+                        }
+                }
+                $columna.=$finalseparation;
+                $this->arrdata.=$columna;
+        }        
+        
+        /**
+        * Retorna el array de datos sin ningun formato
+        * @param    array   $data       columna de datos
+        */        
+	function getalldata() {
+                return $this->arrdata;
+        }
+        
+        /**
+        * Imprime en pantalla el texto generado
+        */        
+	function printtext() {
+                echo $this->arrdata;
+        } 
+
+        /**
+        * Imprime en pantalla el texto generado con saltos de linea html
+        */        
+	function printtextbr() {
+                global $finalseparation, $separation;
+                
+                $datas = explode ($finalseparation, $this->arrdata);
+                foreach ($datas as $data) {
+                        echo "".$data."<br>\n";
+                }
+        }          
+
+        /**
+        * Retorna array de solo lineas de datos
+        */        
+	function getallrows() {
+                global $finalseparation;
+                
+                $datas = explode ($finalseparation, $this->arrdata);
+                return $datas;
+        }
+
+        /**
+        * Retorna array de datos de una linea
+        */        
+	function getrow($data) {
+                global $separation;
+                
+                $datas = explode ($separation, $data);
+                return $datas;
+        }        
+
+}
+
+
+class PDF extends FPDF
+{
+	//Pie de página
+	public function Footer()
+	{
+		//Posición: a 1,5 cm del final
+		$this->SetY(-15);
+		$this->SetFont('Arial','I',8);
+		$this->Cell(0,10,'Página '.$this->PageNo().'/{nb}',0,0,'L');
+	}
+}
+
+?>

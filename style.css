@@ -1,0 +1,38 @@
+body {
+	font-family: Verdana, Helvetica, sans-serif;
+	font-size: 8pt;
+	text-align: center;
+	background-color:#ffffff;
+}
+
+a {
+  color: #4b2de3;
+  text-decoration: none;
+  border: none;
+}
+
+a:hover {
+  color: #8876e3;
+  text-decoration: underline;
+}
+
+.visible {
+	display:block;
+}
+.oculto {
+	display:none;
+}
+
+a.boton {
+  font-size: 12pt;
+  color: #b57;
+  background: #fb8cfc;
+  font-weight: bold;
+}
+
+img{	/* No image borders */
+	border:0px;
+}
+h3 {
+	font-size: 10pt;
+}

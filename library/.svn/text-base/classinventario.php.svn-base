@@ -1,0 +1,1120 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2007 Jose Antonio Cely Saidiza
+*  Email jose.cely@gmail.com
+*  Bogotá Colombia
+****************************************************************************/
+
+
+
+/**
+* Objeto con todo lo necesario para manejar productos e inventario
+* Ejemplo de uso:
+* <code>
+* $producto=new inventario('0000012');
+* </code>
+* @author Jose Antonio Cely Saidiza <jose.cely@gmail.com>
+* @version 0.01
+* TODO: 
+* - zxcv
+*/
+class inventario {
+
+        protected $Actor;
+        protected $ActorNombre;
+	protected $Linea;
+        protected $LineaDescripcion;
+        // variables de producto
+        protected $Nombre;
+        protected $Referencia;
+        protected $Descripcion;
+        protected $Grupo;
+        protected $Var0;
+        protected $Var1;
+        protected $Var2;
+        protected $Var3;        
+        protected $Var4;        
+        protected $Var5;        
+        protected $Tipo;        
+        protected $Ultimaedicion;
+        protected $Estado;
+		protected $Unidad_empaque;
+        protected $DesGrupo;
+        protected $DesCategoria;
+        protected $DesProductoVar0;
+        protected $DesProductoVar1; 
+        protected $DesProductoVar5; 
+        protected $imagesupload;
+        protected $image1=FALSE;
+        protected $image2=FALSE;
+        protected $image3=FALSE;
+        // informacion de stock
+        protected $StockMaximo;
+        protected $StockMinimo;
+        protected $Stock;
+        protected $Bodegas;
+        protected $Moreinfo;
+
+        protected $FechaEntrada;
+        protected $FechaSalida;
+        
+        protected $CaptionLinea;        // captions de la defenicion de las variables
+        protected $CaptionVar0;
+        protected $CaptionVar1;
+        protected $CaptionVar2;
+        protected $CaptionVar3;
+        protected $fabricante;
+        protected $images = TRUE; // si usará el directorio imagen
+        protected $maxsise=1024000;// maximo tamaño de archivo 1Mb para iamgenes
+        protected $thumb = 70; // tamaño en pixles de los thumb a generar
+        protected $imagesize = 320;  // tamaaño en pixeles de imagen estandar
+	protected $urlimages = 'images/inventario'; // paths a la imagen
+        
+	protected $ahora;
+	protected $id;
+	protected $codigobarra;
+        protected $nextcodigobarra;
+        
+	var $styletable = 'tablemakeform';
+	var $stylefoother = 'tablemakefoother';
+	var $styleheader = 'tablemakeheader';
+	var $stylerow = 'tablemakerow';
+	var $stylebutton = 'tablemakebutton';
+
+        var $debug = FALSE;
+	
+	function __construct($Producto = FALSE){  // inicializo variables del objeto si hay producto
+                global $db;
+                if ($Producto) {
+                        $this->loadproduct($Producto);
+                }
+                $this->makenextbar();  // cargo de una vez la siguiente barra
+                $this->ahora=time();
+	}
+
+        /**
+        * Genera el codigo de la Siguiente barra
+        */
+        function makenextbar() {
+                global $db;
+
+                $id = $db->get_var("SELECT MAX(id) AS max FROM `Producto`");	// saco el consecutivo
+                $id++;
+
+                if (($id) < 10) {		// agrego ceros que hagan falta
+                        $this->nextcodigobarra="000000"."$id";
+                } else if (($id) < 100) {
+                        $this->nextcodigobarra="00000"."$id";
+                } else if (($id) < 1000) {
+                        $this->nextcodigobarra="0000"."$id";
+                } else if (strlen($id) < 10000) {
+                        $this->nextcodigobarra="00"."$id";
+                } else if (strlen($id) < 100000) {
+                        $this->nextcodigobarra="0"."$id";
+                } else {
+                        $this->nextcodigobarra="$id";
+                }                
+        }
+  
+        /**
+        * Carga un Producto en memoria por el id
+        * @param    int    $id  id del producto
+        */
+	function loadproductbyid($id) {		// cargar variables de un prodcuto
+                global $db;
+                if ($Codigobarra=$db->get_var("SELECT Codigobarra FROM Producto WHERE id = '".$id."'")) {
+                        $this->loadproduct($Codigobarra);
+                        return true;
+		} else {
+			return false;
+                }
+        }
+        
+        /**
+        * Carga un Producto en memoria por el codigo de barra
+        * @param    char        $Codigobarra       Codigo de barra
+        */
+	function loadproduct($Codigobarra) {		// cargar variables de un prodcuto
+                global $db;
+
+					$sql = "SELECT Producto.id, Producto.Nombre, Producto.Referencia, Producto.Descripcion, Producto.Linea, Producto.Grupo, Producto.Categoria, Producto.Var0, Producto.Var1, Producto.Var2, Producto.Var3, Producto.Var4, Producto.Var5, Producto.Tipo, Producto.Ultimaedicion, Producto.Estado, Grupo.Descripcion AS DesGrupo, Categoria.Descripcion AS DesCategoria, ProductoVar0.Descripcion AS DesProductoVar0, ProductoVar1.Descripcion AS DesProductoVar1, ProductoVar5.Descripcion AS DesProductoVar5, Unidad_empaque, Linea.Actor AS Actorlinea
+							FROM `Producto`
+							LEFT JOIN Grupo ON Producto.Grupo = Grupo.id
+							LEFT JOIN Linea ON Producto.Linea = Linea.id
+							LEFT JOIN Categoria ON Producto.Categoria = Categoria.id
+							LEFT JOIN ProductoVar0 ON Producto.Var0 = ProductoVar0.id
+							LEFT JOIN ProductoVar1 ON Producto.Var1 = ProductoVar1.id
+							LEFT JOIN ProductoVar5 ON Producto.Var5 = ProductoVar5.id
+							WHERE Producto.Codigobarra = '".$Codigobarra."'";
+			if ($prod = $db->get_row($sql)) {
+				$this->Codigobarra=$Codigobarra;
+				$this->id=$prod->id;
+				$this->Actor=$prod->Actorlinea;
+				$this->Nombre=$prod->Nombre;
+				$this->Referencia=$prod->Referencia;
+				$this->Descripcion=$prod->Descripcion;
+				$this->Linea=$prod->Linea;
+				$this->Grupo=$prod->Grupo;
+				$this->Categoria=$prod->Categoria;
+				$this->Var0=$prod->Var0;
+				$this->Var1=$prod->Var1;
+				$this->Var2=$prod->Var2;
+				$this->Var3=$prod->Var3;
+				$this->Var4=$prod->Var4;
+				$this->Var5=$prod->Var5;
+				$this->Unidad_empaque=$prod->Unidad_empaque;
+				$this->Tipo=$prod->Tipo;
+				$this->Ultimaedicion=$prod->Ultimaedicion;
+				$this->Estado=$prod->Estado;
+				$this->DesGrupo=$prod->DesGrupo;
+				$this->DesCategoria=$prod->DesCategoria;
+				$this->DesProductoVar0=$prod->DesProductoVar0;
+				$this->DesProductoVar1=$prod->DesProductoVar1;
+				$this->DesProductoVar5=$prod->DesProductoVar5;
+
+				$this->FechaEntrada=$prod->FechaEntrada;
+				$this->FechaSalida=$prod->FechaSalida;
+				
+				$this->Stock=$db->get_var("SELECT SUM( Qty ) AS Stock FROM Existencia WHERE id_producto = '".$this->id."' AND Existe = 1");
+
+				$this->codigobarra=$Codigobarra;
+				$this->loadvarsline($this->Linea);
+				$this->qtyimages($Codigobarra);
+				return true;
+			} else {
+				return false;
+			}      
+        }
+        
+        /**
+        * Carga los valores de una Linea y los Captions del Actor en base a la Linea
+        * @param    int    $Linea       id de la linea
+        */        
+	function loadvarsline($Linea) {	
+                global $db;
+                $this->Linea=$Linea;
+                $sql = "SELECT Actor, Linea.Descripcion, Actor.Nombre1, ActorProducto.CaptionLinea, ActorProducto.CaptionVar0, ActorProducto.CaptionVar1, ActorProducto.CaptionVar2, ActorProducto.CaptionVar3
+                FROM `Linea`
+                LEFT JOIN Actor ON Linea.Actor = Actor.id
+                LEFT JOIN ActorProducto ON Linea.Actor = id_Actor
+                WHERE Linea.id = '".$this->Linea."'";	
+		if ($line = $db->get_row($sql)) {
+			$this->Actor=$line->Actor;
+                        $this->ActorNombre=$line->Nombre1;
+			$this->LineaDescripcion=$line->Descripcion;
+                        $this->CaptionLinea=$line->CaptionLinea;
+			$this->CaptionVar0=$line->CaptionVar0;
+			$this->CaptionVar1=$line->CaptionVar1;
+			$this->CaptionVar2=$line->CaptionVar2;
+			$this->CaptionVar3=$line->CaptionVar3;
+                        if ($this->images) {
+                                /*
+                                //Consultamos si la carpeta de imagenes de la linea existe, si no la creamos
+                                if (!file_exists(''.$this->urlimages.'/'.$this->Linea.'')) {
+                                        $path = "".$this->urlimages."/".$this->Linea."";
+                                        mkdir ($path, 0755); 							
+                                }
+                                */
+                        }
+                        return true;
+		} else {
+			return false;
+		}      
+        }
+        
+        /**
+        * Carga los Captions del Actor en base al id del actor
+        * @param    int    $id       id del Actor
+        */        
+	function loadvaractor($id) {
+                global $db;
+                $this->Linea=$Linea;
+                $sql = "SELECT id_Actor, CaptionLinea, CaptionVar0, CaptionVar1, CaptionVar2, CaptionVar3, CaptionVar4, CaptionVar5, Actor.Nombre1 FROM `ActorProducto`
+                LEFT JOIN Actor ON ActorProducto.id_Actor = Actor.id
+                WHERE id = '".$id."'";	
+		if ($line = $db->get_row($sql)) {
+                        $this->ActorNombre=$line->Nombre1;
+                        $this->CaptionLinea=$line->CaptionLinea;
+			$this->CaptionVar0=$line->CaptionVar0;
+			$this->CaptionVar1=$line->CaptionVar1;
+			$this->CaptionVar2=$line->CaptionVar2;
+			$this->CaptionVar3=$line->CaptionVar3;
+			$this->CaptionVar4=$line->CaptionVar4;
+			$this->CaptionVar5=$line->CaptionVar5;
+                        return true;
+		} else {
+			return false;
+		}      
+        }        
+        
+        /**
+        * Crea un formulario para crear productos
+        *
+        */
+        function makeform($Fabricante, $files = TRUE) {
+                global $db;
+                if ($this->loadvaractor($Fabricante)) {
+                
+                        $form = new makeform('Producto');
+                        $form->settitle($this->ActorNombre);
+                        $form->sethidden('Estado');
+                        $form->sethidden('Ultimaedicion');
+                        $form->sethidden('id');
+                        $form->setcolumns('2');
+                        $form->setnewname('Linea',$this->CaptionLinea);
+                        $form->setdefaultvalue('Codigobarra',0);
+
+                        if ($this->CaptionVar0!='') {
+                                $form->setnewname('Var0',$this->CaptionVar0);
+                        } else {
+                                $form->sethidden('Var0');
+                        }
+                        if ($this->CaptionVar1!='') {
+                                $form->setnewname('Var1',$this->CaptionVar1);
+                        } else {
+                                $form->sethidden('Var1');
+                        }
+                        if ($this->CaptionVar2!='') {
+                                $form->setnewname('Var2',$this->CaptionVar2);
+                        } else {
+                                $form->sethidden('Var2');
+                        }
+                        if ($this->CaptionVar3!='') {
+                                $form->setnewname('Var3',$this->CaptionVar3);
+                        } else {
+                                $form->sethidden('Var3');
+                        }
+                        if ($this->CaptionVar4!='') {
+                                $form->setnewname('Var4',$this->CaptionVar4);
+                        } else {
+                                $form->sethidden('Var4');
+                        }
+                        if ($this->CaptionVar5!='') {
+                                $form->setnewname('Var5',$this->CaptionVar5);
+                        } else {
+                                $form->sethidden('Var5');
+                        }
+
+                        $form->setselect('Linea,Linea,id,Descripcion,Actor,'.$Fabricante.''); // menu con la tabla linea
+                        $form->setselect('Grupo,Grupo,id,Descripcion'); // menu con la tabla	Grupo                
+                        $form->setselect('Categoria,Categoria,id,Descripcion'); // menu con la tabla Descripcion
+                        $form->setselect('Var0,ProductoVar0,id,Descripcion'); // menu con la tabla	Estado
+                        $form->setselect('Var1,ProductoVar1,id,Descripcion'); // menu con la tabla	Estado
+                        $form->setselect('Var5,ProductoVar5,id,Descripcion'); // menu con la tabla	Estado
+                        $form->setselect('Unidad_medida,Unidad_medida,id,Descripcion'); // menu con la tabla	Estado
+                        $form->setselect('Unidad_empaque,Unidad_empaque,id,Descripcion'); // menu con la tabla	Estado
+                        $form->setselect('Tipo,Tipo,id,Descripcion'); // menu con la tabla	Estado
+                        $form->firstvalueselect('Grupo');
+                        $form->firstvalueselect('Unidad_empaque');
+                        $form->firstvalueselect('Categoria');
+                        if ($files) {
+                                $form->newcamp('Estado','Foto[]','varchar','6','');  // campo virtual
+                                $form->newcamp('Foto[]','Foto[]','varchar','6','');  // campo virtual
+                                $form->newcamp('Foto[]','Foto[]','varchar','6','');  // campo virtual
+                                $form->setfileform('Foto[]');
+                        }                        
+                        $form->makejavascript();
+                        $form->showform();
+                        return true;
+                } else {
+                        return false;
+                }                
+        }
+        
+        /**
+        * Crea un Producto
+        * @param     
+        */
+	function makeproduct($Codigobarra, $Tipo, $Nombre, $Referencia, $Descripcion, $Linea, $Grupo, $Categoria, $Var0 = 0, $Var1 = 0, $Var2 = 0, $Var3 = '', $Var4 = '', $Var5 =0, $Unidad_medida = 1, $Unidad_empaque = 1) { 
+			global $db;
+			
+			$Nombre=str_replace("'","\'",$Nombre);
+			$Referencia=str_replace("'","\'",$Referencia);
+			$Descripcion=str_replace("'","\'",$Descripcion);
+			$Var3=str_replace("'","\'",$Var3);
+			$Var4=str_replace("'","\'",$Var4);
+			
+			if(!$Codigobarra) {
+					$Codigobarra=$this->nextcodigobarra;
+			} else {
+					$Codigobarra=str_replace("'","\'",$Codigobarra);
+			}
+			
+			$sql = "INSERT INTO Producto (`Codigobarra`, `Tipo`, `Nombre`, `Referencia`, `Descripcion`, `Linea`, `Grupo`, `Categoria`, `Var0`, `Var1`, `Var2`, `Var3`, `Var4`, `Var5`, `Ultimaedicion`, `Unidad_medida`, `Unidad_empaque`) VALUES ('$Codigobarra','$Tipo', '$Nombre', '$Referencia', '$Descripcion', '$Linea', '$Grupo', '$Categoria', '$Var0', '$Var1', '$Var2', '$Var3', '$Var4', '$Var5', '".$this->ahora."', '$Unidad_medida', '$Unidad_empaque')";	
+			if ($db->query($sql) AND $this->loadvarsline($Linea)) {
+							$this->codigobarra=$Codigobarra; // cargo nuevamente codigo barra por si acaso
+							$this->id=$db->get_var("SELECT id FROM Producto WHERE Codigobarra = '".$this->codigobarra."'");
+							$this->makenextbar();
+							return $Codigobarra; // retorno el codigo de barra
+			} else {
+				return false;
+			}      
+        }
+        
+        /**
+        * Actualiza un Producto cargado
+        * @param     
+        */
+	function updateproduct($Nombre, $Tipo, $Referencia, $Descripcion, $Linea, $Grupo, $Categoria, $Var0 = 0, $Var1 = 0, $Var2 = 0, $Var3 = '', $Var4 = '', $Var5 = 0, $Unidad_medida = 1, $Unidad_empaque = 1) { 
+			global $db;
+			
+			if($this->id == '' OR $this->Codigobarra == '') {
+				 return false;
+			} else {
+				$Nombre=str_replace("'","\'",$Nombre);
+				$Referencia=str_replace("'","\'",$Referencia);
+				$Descripcion=str_replace("'","\'",$Descripcion);
+				$Var3=str_replace("'","\'",$Var3);
+                $Var4=str_replace("'","\'",$Var4);
+                
+				$sql = "UPDATE Producto SET `Codigobarra` = '$this->Codigobarra', `Tipo` = '$Tipo', `Nombre` = '$Nombre', `Referencia` = '$Referencia', `Descripcion` = '$Descripcion', `Linea` = '$Linea', `Grupo` = '$Grupo', `Categoria` = '$Categoria', `Var0`= '$Var0', `Var1` = '$Var1', `Var2` = '$Var2', `Var3` = '$Var3', `Var4` = '$Var4', `Var5` = '$Var5', `Unidad_medida` =  '".$Unidad_medida."', `Ultimaedicion` = '".$this->ahora."', Unidad_empaque = '".$Unidad_empaque."' WHERE id = '".$this->id."' LIMIT 1";	
+				if ($db->query($sql) AND $this->loadvarsline($Linea)) {
+								$this->makenextbar();
+								return TRUE; // retorna verdadero si todo es correcto
+				} else {
+					return false;
+				}
+			}
+        }
+
+        /**
+        * Actualiza un Var de Producto cargado
+        * @param     
+        */
+	function updateproduct_var0($new) { 
+			global $db;
+			
+			if($this->id == '') {
+				 return false;
+			} else {
+				$sql = "UPDATE Producto SET `Var0` = '$new' WHERE id = '".$this->id."' LIMIT 1";	
+				if ($db->query($sql)) {
+					return TRUE; // retorna verdadero si todo es correcto
+				} else {
+					return false;
+				}
+			}
+        }        
+		
+        /**
+        * Actualiza un Var1 de Producto cargado
+        * @param     
+        */
+	function updateproduct_var1($new) { 
+			global $db;
+			
+			if($this->id == '') {
+				 return false;
+			} else {
+				$sql = "UPDATE Producto SET `Var1` = '$new' WHERE id = '".$this->id."' LIMIT 1";	
+				if ($db->query($sql)) {
+					return TRUE; // retorna verdadero si todo es correcto
+				} else {
+					return false;
+				}
+			}
+        }  
+
+        /**
+        * Actualiza un Var2 de Producto cargado
+        * @param     
+        */
+	function updateproduct_var2($new) { 
+			global $db;
+			
+			if($this->id == '') {
+				 return false;
+			} else {
+				$sql = "UPDATE Producto SET `Var2` = '$new' WHERE id = '".$this->id."' LIMIT 1";	
+				if ($db->query($sql)) {
+					return TRUE; // retorna verdadero si todo es correcto
+				} else {
+					return false;
+				}
+			}
+        }  
+
+        /**
+        * Actualiza un Var de Producto cargado
+        * @param     
+        */
+	function updateproduct_var3($new) { 
+			global $db;
+			
+			if($this->id == '') {
+				 return false;
+			} else {
+				$sql = "UPDATE Producto SET `Var3` = '$new' WHERE id = '".$this->id."' LIMIT 1";	
+				if ($db->query($sql)) {
+					return TRUE; // retorna verdadero si todo es correcto
+				} else {
+					return false;
+				}
+			}
+        }  
+
+        /**
+        * Actualiza un Var de Producto cargado
+        * @param     
+        */
+	function updateproduct_var4($new) { 
+			global $db;
+			
+			if($this->id == '') {
+				 return false;
+			} else {
+				$sql = "UPDATE Producto SET `Var4` = '$new' WHERE id = '".$this->id."' LIMIT 1";	
+				if ($db->query($sql)) {
+					return TRUE; // retorna verdadero si todo es correcto
+				} else {
+					return false;
+				}
+			}
+        }       
+
+        /**
+        * Actualiza un Var de Producto cargado
+        * @param     
+        */
+	function updateproduct_var5($new) { 
+			global $db;
+			
+			if($this->id == '') {
+				 return false;
+			} else {
+				$sql = "UPDATE Producto SET `Var5` = '$new' WHERE id = '".$this->id."' LIMIT 1";	
+				if ($db->query($sql)) {
+					return TRUE; // retorna verdadero si todo es correcto
+				} else {
+					return false;
+				}
+			}
+        }     
+                                       		
+		/**
+        * Adjunta imagenes a un producto, Maximo 4 imagenes
+        * Images puede ser un array con multiples imagenes, si se especifica numero la imagen
+        * se creara/sobrescribira apartir del numero establecido
+        * URL a imagenes "$this->urlimages/$this->Linea/$this->Grupo/$this->id-$cons.png
+        * @param  
+        */        
+        function putimages($Codigobarra, $images) {
+                global $db, $HTTP_POST_FILES;
+                
+                if ($this->images AND $images != '') {
+                        if ($this->loadproduct($Codigobarra)){ // cargo producto
+                                /*Consultasmo si la carpeta de imagenes de producto existe, si no la creamos
+                                if (!file_exists(''.$this->urlimages.'/'.$this->Linea.'/'.$this->Grupo.'')) {
+                                        $path = "".$this->urlimages."/".$this->Linea."/".$this->Grupo."";
+                                        mkdir ($path, 0755); 							
+                                }                                
+                                if (!file_exists(''.$this->urlimages.'/'.$this->Linea.'/'.$this->Grupo.'/'.$this->id.'')) {
+                                        $path = "".$this->urlimages."/".$this->Linea."/".$this->Grupo."/".$this->id."";
+                                        mkdir ($path, 0755); 							
+                                }
+                                */                             
+                                if (!file_exists(''.$this->urlimages.'/'.$this->id.'')) {
+                                        $path = "".$this->urlimages."/".$this->id."";
+                                        mkdir ($path, 0755); 							
+                                }
+
+                                if (isset($_FILES[$images])) {
+										
+										$imagesbefore=$this->qtyimages($Codigobarra);
+										$i=-1;
+										$num=count($imagesbefore);
+										$tot = 3+$num;
+
+										//este for recorre el arreglo
+										for ($b = $num; $b < $tot; $b++){										
+												$i++;
+                                                $extension = explode(".",$HTTP_POST_FILES[$images]['name'][$i]); 
+                                                $extension = $extension[1];
+                                                if($HTTP_POST_FILES[$images]['size'][$i] < $this->maxsise AND $HTTP_POST_FILES[$images]['size'][$i] > 10) {
+                                                        /*
+                                                        copy($HTTP_POST_FILES[$images]['tmp_name'][$i], "".$this->urlimages."/".$this->Linea."/".$this->Grupo."/".$this->id."/Orig_".$this->id."_".$i.".".$extension."");
+                                                        */
+                                                        copy($HTTP_POST_FILES[$images]['tmp_name'][$i], "".$this->urlimages."/".$this->id."/Orig_".$this->id."_".$b.".".$extension."");
+                                                        
+                                                        $subio = true;
+                                               
+                                                } else {
+                                                        $subio = false;
+                                                }
+                                                if($subio) {
+                                                        // genero el thumbail
+                                                        /*
+                                                        $thumb=new ImageResize("".$this->urlimages."/".$this->Linea."/".$this->Grupo."/".$this->id."/Orig_".$this->id."_".$i.".".$extension."");
+                                                        */
+                                                        $thumb=new ImageResize("".$this->urlimages."/".$this->id."/Orig_".$this->id."_".$b.".".$extension."");
+                                                        
+                                                        $Width=$thumb->GetWidth(); // obtengo el tamaño de la imagen
+                                                        $thumb->resizeWidth($this->thumb);
+                                                        /*                                                             $thumb->save("".$this->urlimages."/".$this->Linea."/".$this->Grupo."/".$this->id."/thumb_".$this->id."_".$i.".".$extension."");
+                                                        */
+                                                        $thumb->save("".$this->urlimages."/".$this->id."/thumb_".$this->id."_".$b.".".$extension."");
+                                                        
+                                                        if ($Width > $this->imagesize) { // si la imagen es mas grande del estandar crea otra
+                                                                $thumb->resizeWidth($this->imagesize);
+                                                                /*                                                                $thumb->save("".$this->urlimages."/".$this->Linea."/".$this->Grupo."/".$this->id."/normal_".$this->id."_".$i.".".$extension."");
+                                                                */
+                                                                $thumb->save("".$this->urlimages."/".$this->id."/normal_".$this->id."_".$b.".".$extension."");
+                                                                
+                                                        } else { // si es mas pequeña la copia como estandar
+                                                                /*
+                                                                copy($HTTP_POST_FILES[$images]['tmp_name'][$i], "".$this->urlimages."/".$this->Linea."/".$this->Grupo."/".$this->id."/normal_".$this->id."_".$i.".".$extension."");
+                                                                */
+                                                                copy($HTTP_POST_FILES[$images]['tmp_name'][$i], "".$this->urlimages."/".$this->id."/normal_".$this->id."_".$b.".".$extension."");
+                                                        }
+                                                } else { // si no subio
+                                                              echo "El archivo de imagen <b>$i</b> no cumple con las reglas establecidas o esta vacio<br>\n";
+                                                }
+                                        }
+                                        return true;
+                                } else {
+                                        return false;
+                                }
+                        } else {
+                                return false;
+                        }
+                } else {                // si no esta activo imagenes
+                        return false;
+                }
+        }
+
+        /**
+        * Genera el Html necesario para mostrar un producto en pantalla
+        * @param    int     mode        0 = Carga Solo Texto, 1 = Carga texto con imagen Estandar y mas informacion, 2 = Carga Texto con Thumb?, 3 Carga producto con formulario de edicion, 
+        */
+        function showproduct($mode, $Codigobarra, $Emergente = TRUE, $Ajaxedicion = FALSE) {
+                global $db;
+                
+                if ($this->loadproduct($Codigobarra)){
+                        if ($Emergente) {
+                                $varhtm="$this->Nombre - <a href='javascript: showproduct($this->id)'>$this->codigobarra</a>";
+                        } else {
+                                $varhtm="$this->Nombre - $this->codigobarra";                                
+                        }
+                        if (count($this->imagesupload)>0) {
+                                /*
+                                $tumb="".$this->urlimages."/".$this->Linea."/".$this->Grupo."/".$this->id."/thumb_".$this->id."_0.".$this->imagesupload[0]."";
+                                $image="".$this->urlimages."/".$this->Linea."/".$this->Grupo."/".$this->id."/normal_".$this->id."_0.".$this->imagesupload[0]."";
+                                */
+                                $tumb="".$this->urlimages."/".$this->id."/thumb_".$this->id."_0.".$this->imagesupload[0]."";
+                                $image="".$this->urlimages."/".$this->id."/normal_".$this->id."_0.".$this->imagesupload[0]."";                                
+                        } else {
+                                $tumb="".$this->urlimages."/noimage.png";
+                                $image="".$this->urlimages."/noimage.png";
+                        }
+                        $html="";
+                        if ($mode==0) {
+                                $html.="<div class=\"simpletext2\"><img align=\"left\" src=\"images/info.gif\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] cssheader=[sackdata] fixedrelx=[10] fixedrely=[10]  header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>"; 
+                                // titulo tooltip
+                                $html.="$varhtm";
+                                $html.="] body=[";
+                                //contenido tooltip
+                                $html.="<img align='top' src='$image'><br><b>Referencia</b>: $this->Referencia, <b>Stock</b> = $this->Stock<BR>";
+                                $html.="]\">";
+                                $html.="<b>$this->codigobarra</b>, $this->Nombre<br>\n";
+                                $html.="<b>Ref</b>: $this->Referencia<br>\n";
+                                $html.="<b>$this->CaptionLinea</b>: $this->LineaDescripcion<br>\n";
+                                $html.="<b>$this->CaptionVar0</b>: $this->DesProductoVar0<br>\n";
+                                $html.="<b>$this->CaptionVar1</b>: $this->DesProductoVar1<br></div>\n";                                
+                        } else  if ($mode==1 OR $mode ==2){
+                                $html.="<div class=\"simpletext\"><img align=\"left\" src=\"".$tumb."\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] cssheader=[sackdata] fixedrelx=[10] fixedrely=[10]  header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>";
+                                // titulo tooltip
+                                $html.="$varhtm";
+                                $html.="] body=[";
+                                //contenido tooltip
+                                $html.="<img align='top' src='$image'><br><b>Referencia</b>: $this->Referencia, <b>Stock</b> = $this->Stock<BR>";
+                                $html.="]\">";
+                                $html.="<b>$this->codigobarra</b><br>\n";
+                                $html.="$this->Nombre<br>\n";
+                                $html.="<b>Ref</b>: $this->Referencia<br>\n";
+                                $html.="<b>$this->CaptionLinea</b>: $this->LineaDescripcion<br>\n";
+                                $html.="<b>$this->CaptionVar0</b>: $this->DesProductoVar0<br>\n";
+                                $html.="<b>$this->CaptionVar1</b>: $this->DesProductoVar1<br></div>\n";
+                        } else if ($mode == 3) {  		// modo edición!
+						
+								$Fabricante=$db->get_var("SELECT Actor FROM Linea WHERE id = '".$this->Linea."'");
+								if ($this->loadvaractor($Fabricante)) {
+										$infotable2 = $db->get_row("SELECT * FROM Producto WHERE id = '$this->id'",ARRAY_N);
+										$infotable = $db->get_results("describe Producto");
+										
+										$i=0;
+										foreach ($infotable as $datatable) {		// aca creo los arrays de caracteristicas
+											$campdata[$datatable->Field] = $infotable2[$i];
+											$i++;
+										}		
+												
+										$form = new makeform('Producto');
+							
+										foreach ($campdata as $clave => $value) {
+											$form->setdefaultvalue($clave,$value); // valores por defecto
+										}
+										$form->settitle($this->ActorNombre);
+										$form->sethidden('Estado');
+										$form->sethidden('Ultimaedicion');
+										$form->sethidden('id');
+										$form->setcolumns('2');
+										$form->setnewname('Linea',$this->CaptionLinea);
+										$form->setreadonly('Codigobarra');
+				
+										if ($this->CaptionVar0!='') {
+												$form->setnewname('Var0',$this->CaptionVar0);
+										} else {
+												$form->sethidden('Var0');
+										}
+										if ($this->CaptionVar1!='') {
+												$form->setnewname('Var1',$this->CaptionVar1);
+										} else {
+												$form->sethidden('Var1');
+										}
+										if ($this->CaptionVar2!='') {
+												$form->setnewname('Var2',$this->CaptionVar2);
+										} else {
+												$form->sethidden('Var2');
+										}
+										if ($this->CaptionVar3!='') {
+												$form->setnewname('Var3',$this->CaptionVar3);
+										} else {
+												$form->sethidden('Var3');
+										}
+										if ($this->CaptionVar4!='') {
+												$form->setnewname('Var4',$this->CaptionVar4);
+										} else {
+												$form->sethidden('Var4');
+										}										
+										if ($this->CaptionVar5!='') {
+												$form->setnewname('Var5',$this->CaptionVar5);
+										} else {
+												$form->sethidden('Var5');
+										}               
+                                        $form->setselect("Linea,Linea,id,Descripcion,Actor,".$Fabricante.""); // menu con la tabla linea
+										$form->setselect('Grupo,Grupo,id,Descripcion'); // menu con la tabla	Grupo                
+										$form->setselect('Unidad_empaque,Unidad_empaque,id,Descripcion'); // menu con la tabla	Grupo                
+										$form->setselect('Categoria,Categoria,id,Descripcion'); // menu con la tabla Descripcion
+										$form->setselect('Unidad_medida,Unidad_medida,id,Descripcion'); // menu con la tabla Descripcion
+										$form->setselect("Var0,ProductoVar0,id,Descripcion,Actor,".$Fabricante.""); // menu con la tabla	Estado
+										$form->setselect("Var1,ProductoVar1,id,Descripcion,Actor,".$Fabricante.""); // menu con la tabla	Estado
+										$form->setselect("Var5,ProductoVar5,id,Descripcion,Actor,".$Fabricante.""); // menu con la tabla	Estado
+										$form->setselect("Tipo,Tipo,id,Descripcion"); // Tipo
+										$form->firstvalueselect('Grupo');
+										$form->firstvalueselect('Categoria');
+										$form->firstvalueselect('Var0');
+										$form->firstvalueselect('Var1');
+										$form->firstvalueselect('Var5');
+										//if ($files) {
+												$form->newcamp('Estado','Foto[]','varchar','6','');  // campo virtual
+												$form->newcamp('Foto[]','Foto[]','varchar','6','');  // campo virtual
+												$form->newcamp('Foto[]','Foto[]','varchar','6','');  // campo virtual
+												$form->setfileform('Foto[]');
+										//}   
+										$form->setnamebutton('Actualizar');                     
+										$form->makejavascript();
+										$form->showform();
+										return true;
+								} else {
+										return false;
+								}							
+						}
+                        return $html;
+                } else  {
+                        return FALSE;
+                }
+        }
+
+
+        /**
+        * Muestra un listado de productos en pantalla
+        * @param    int     mode        0 = Carga Solo Texto, 1 = Carga texto con imagen Estandar y mas informacion, 2 = Carga Texto con Thumb, 
+        */
+        function showproducts($mode, $Codigobarra, $Emergente = TRUE, $Ajaxedicion = FALSE) {
+                global $db;
+                
+                if ($this->loadproduct($Codigobarra)){
+                        if ($Emergente) {
+                                $varhtm="$this->Nombre - <a href='javascript: showproduct($this->id)'>$this->codigobarra</a>";
+                        } else {
+                                $varhtm="$this->Nombre - $this->codigobarra";                                
+                        }
+                        if (count($this->imagesupload)>0) {
+                                /*
+                                $tumb="".$this->urlimages."/".$this->Linea."/".$this->Grupo."/".$this->id."/thumb_".$this->id."_0.".$this->imagesupload[0]."";
+                                $image="".$this->urlimages."/".$this->Linea."/".$this->Grupo."/".$this->id."/normal_".$this->id."_0.".$this->imagesupload[0]."";
+                                */
+                                $tumb="".$this->urlimages."/".$this->id."/thumb_".$this->id."_0.".$this->imagesupload[0]."";
+                                $image="".$this->urlimages."/".$this->id."/normal_".$this->id."_0.".$this->imagesupload[0]."";                                
+                        } else {
+                                $tumb="".$this->urlimages."/noimage.png";
+                                $image="".$this->urlimages."/noimage.png";
+                        }
+                        $html="";
+                        if ($mode==0) {
+                                $html.="<div class=\"simpletext2\"><img align=\"left\" src=\"images/info.gif\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] cssheader=[sackdata] fixedrelx=[10] fixedrely=[10]  header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>"; 
+                                // titulo tooltip
+                                $html.="$varhtm";
+                                $html.="] body=[";
+                                //contenido tooltip
+                                $html.="<img align='top' src='$image'><br><b>Referencia</b>: $this->Referencia, <b>Stock</b> = $this->Stock<BR>";
+                                $html.="]\">";
+                                $html.="<b>$this->codigobarra</b>, $this->Nombre<br>\n";
+                                $html.="<b>Ref</b>: $this->Referencia<br>\n";
+                                $html.="<b>$this->CaptionLinea</b>: $this->LineaDescripcion<br>\n";
+                                $html.="<b>$this->CaptionVar0</b>: $this->DesProductoVar0<br>\n";
+                                $html.="<b>$this->CaptionVar1</b>: $this->DesProductoVar1<br></div>\n";                                
+                        } else {
+                                $html.="<div class=\"simpletext\"><img align=\"left\" src=\"".$tumb."\" style=\"cursor:pointer\" title=\"cssbody=[wrap] requireclick=[on] cssheader=[sackdata] fixedrelx=[10] fixedrely=[10]  header=[<img src='images/ok_mini.gif' style='vertical-align:middle'>";
+                                // titulo tooltip
+                                $html.="$varhtm";
+                                $html.="] body=[";
+                                //contenido tooltip
+                                $html.="<img align='top' src='$image'><br><b>Referencia</b>: $this->Referencia, <b>Stock</b> = $this->Stock<BR>";
+                                $html.="]\">";
+                                $html.="<b>$this->codigobarra</b><br>\n";
+                                $html.="$this->Nombre<br>\n";
+                                $html.="<b>Ref</b>: $this->Referencia<br>\n";
+                                $html.="<b>$this->CaptionLinea</b>: $this->LineaDescripcion<br>\n";
+                                $html.="<b>$this->CaptionVar0</b>: $this->DesProductoVar0<br>\n";
+                                $html.="<b>$this->CaptionVar1</b>: $this->DesProductoVar1<br></div>\n";
+                        }
+                        return $html;
+                } else  {
+                        return FALSE;
+                }
+        }
+
+        
+        /**
+        * Retorna TRUE si el XXX esde grupos o serializados
+        */
+        function isAccesory($Codigobarra) {
+                global $db;
+                $sql="SELECT Tipo FROM `Producto` WHERE Codigobarra = '".$Codigobarra."'";
+                $Grupo = $db->get_var($sql);	// saco el consecutivo
+                if($Grupo == '2') {
+                        return TRUE;
+                } else {
+                        return FALSE;
+                }
+        }
+
+        /**
+        * Retorna la cantidad de imagenes de un Producto
+        */
+	function qtyimages($Codigobarra) {
+                global $db;
+                $this->imagesupload=array(); // vacio array por si hay cargas anteriores
+
+                if ($prodvars=$db->get_row("SELECT id, Linea, Grupo FROM Producto WHERE Codigobarra = '".$Codigobarra."'")){
+                        //if (file_exists(''.$this->urlimages.'/'.$prodvars->Linea.'/'.$prodvars->Grupo.'/'.$prodvars->id.'')) {
+                          if (file_exists(''.$this->urlimages.'/'.$prodvars->id.'')) {
+								//$dp = opendir(''.$this->urlimages.'/'.$prodvars->Linea.'/'.$prodvars->Grupo.'/'.$prodvars->id.''); // recorro carpeta de imagenes
+                                $dp = opendir(''.$this->urlimages.'/'.$prodvars->id.''); // recorro carpeta de imagenes
+                                
+                                while ($files = readdir($dp)) {
+                                        $filename = basename($files);
+                                        if($filename != '.' && $filename != '..') {
+                                                $fileexploa = explode ('.', $filename);
+                                                $fileexplob = explode ('_', $fileexploa[0]);
+                                                if ($fileexplob[0]=='Orig'){  // solo cuento un archivo
+                                                        $this->imagesupload[$fileexplob[2]]=$fileexploa[1];  // saco el numero y extension
+                                                        $maxnumber[$fileexplob[2]]=$fileexploa[1];
+                                                }
+                                        }
+                                }
+                                
+                                return $maxnumber;
+                        } else {
+                                return false;
+                        }
+                } else {
+                        return false;
+                }
+	}
+      
+        /** 
+        * Retorna el path de las imagenes de productos
+        */
+	function geturlimages() {
+                return $this->urlimages;
+	}
+        
+        /**
+        * Retorna el id de la Linea
+        */
+	function getLinea() {
+                return $this->Linea;
+	}
+
+        /**
+        * Retorna el id de un producto
+        */
+	function getId() {
+                return $this->id;
+	}
+	
+        /**
+        * Retorna el tipo de un producto
+        */
+	function geTipo() {
+                return $this->Tipo;
+	}
+
+        /**
+        * Retorna el id del Var0 
+        */
+	function getVar0() {
+                return $this->Var0;
+	}
+        
+        /**
+        * Retorna el id del Var1 
+        */
+	function getVar1() {
+                return $this->Var1;
+	}
+        
+        /**
+        * Retorna el id del Var2 
+        */
+	function getVar2() {
+                return $this->Var2;
+	}
+        
+        /**
+        * Retorna el id del Var3 
+        */
+	function getVar3() {
+                return $this->Var3;
+	}
+        
+        /**
+        * Retorna el id del Var4 
+        */
+	function getVar4() {
+                return $this->Var4;
+	}
+        
+        /**
+        * Retorna el id del Var5 
+        */
+	function getVar5() {
+                return $this->Var5;
+	}
+        
+        /**
+        * Retorna el id del Grupo 
+        */
+	function getGrupo() {
+                return $this->Grupo;
+	}
+                                                        
+        /**
+        * Retorna el Nombre del Grupo 
+        */
+	function getNameGrupo() {
+                global $db;
+                $grupo=$db->get_var("SELECT Descripcion FROM Grupo WHERE id = '".$this->Grupo."'");
+                return $grupo;
+	}
+        
+        /**
+        * Retorna el ActorNombre del Fabricante
+        */
+	function getFabricanteNombre() {
+                return $this->ActorNombre;
+	}
+
+        /**
+        * Retorna el Actor del Fabricante
+        */
+	function getFabricanteId() {
+                return $this->Actor;
+	}
+        
+        /**
+        * Retorna el nombre de la Referencia
+        */
+	function getReferencia() {
+                return $this->Referencia;
+	}
+        
+        /**
+        * Retorna la Descripcion
+        */
+	function getDescripcion() {
+                return $this->Descripcion;
+	}
+        
+        /**
+        * Retorna array con mas informción de lproducto
+        */
+	function getMoreinfo() {
+                $this->Moreinfo['Codigobarra']=$this->codigobarra;                
+                $this->Moreinfo[$this->CaptionLinea]=$this->LineaDescripcion;
+                $this->Moreinfo['Grupo']=$this->DesGrupo;
+                $this->Moreinfo['Categoria']=$this->DesCategoria;
+                $this->Moreinfo[$this->CaptionVar0]=$this->DesProductoVar0;
+                $this->Moreinfo[$this->CaptionVar1]=$this->DesProductoVar1;
+                $this->Moreinfo[$this->CaptionVar2]=$this->Var2;                
+                $this->Moreinfo[$this->CaptionVar3]=$this->Var3;
+                
+                return $this->Moreinfo;
+	}
+ 
+        /**
+        * Retorna el codigo de barra
+        */
+	function getCodigobarra() {
+                return $this->codigobarra;
+	}
+         
+        /**
+        * Retorna el Nombre
+        */
+	function getNombre() {
+                return $this->Nombre;
+	}
+        
+        /**
+        * Retora el array de imagenes subidas
+        */
+	function getimagesupload() {
+                return $this->imagesupload;
+	}
+        
+        /**
+        * Retora el array de las bodegas
+        */
+	function getBodegas() {
+                return $this->Bodegas;
+	}
+
+        /**
+        * Activa/Desactiva las opciones de imagenes de productos
+        */
+	function showimages($trufa) {
+                $this->images=$trufa;
+	}
+
+}
+
+
+/**
+* Clase que crea una copia de una imagen, de un tamaño distinto, a través de distintos métodos
+* Ejemplo de uso:
+* <code>
+* $o=new ImageResize($imagen_origen);
+* $o->resizeWidth(100);
+* $o->save($imagen_destino);
+* </code>
+* TODO: 
+* - Definir de manera automática el formato de salida.
+* - Definir otros tipos de formato de entrada, aparte de gif, jpg y png
+*/
+class ImageResize {
+    var $file_s = "";
+    var $gd_s;
+    var $gd_d;
+    var $width_s;
+    var $height_s;
+    var $width_d;
+    var $height_d;
+    var $aCreateFunctions = array(
+        IMAGETYPE_GIF=>'imagecreatefromgif',
+        IMAGETYPE_JPG=>'imagecreatefromjpg',
+        IMAGETYPE_JPEG=>'imagecreatefromjpeg',
+        IMAGETYPE_PNG=>'imagecreatefrompng',
+    );
+    
+    /**
+    * @param    string  Nombre del archivo
+    */
+    function ImageResize($source) 
+    {
+        $this->file_s = $source;
+        list($this->width_s, $this->height_s, $type, $attr) = getimagesize($source, $info2);
+        $createFunc = $this->aCreateFunctions[$type];
+        if($createFunc) {
+            $this->gd_s = $createFunc($source);
+        }
+    }
+    
+    /**
+    * Retorna el Width de la imagen
+    * @param    int     ancho en pixel
+    */
+    function GetWidth() 
+    {
+        return $this->width_s;
+    } 
+    
+    /**
+    * Redimensiona la imagen de forma proporcional, a partir del ancho
+    * @param    int     ancho en pixel
+    */
+    function resizeWidth($width_d) 
+    {
+        $height_d = floor(($width_d*$this->height_s) /$this->width_s);
+        $this->resizeWidthHeight($width_d, $height_d);
+    }
+    
+    /**
+    * Redimensiona la imagen de forma proporcional, a partir del alto
+    * @param    int     alto en pixel
+    */
+    function resizeHeight($height_d) 
+    {
+        $width_d = floor(($height_d*$this->width_s) /$this->height_s);
+        $this->resizeWidthHeight($width_d, $height_d);
+    }
+    
+    /**
+    * Redimensiona la imagen de forma proporcional, a partir del porcentaje del área
+    * @param    int     porcentaje de área
+    */
+    function resizeArea($perc) 
+    {
+        $factor = sqrt($perc/100);
+        $this->resizeWidthHeight($this->width_s*$factor, $this->height_s*$factor);
+    }
+    
+    /**
+    * Redimensiona la imagen, a partir de un ancho y alto determinado
+    * @param    int     porcentaje de área
+    */
+    function resizeWidthHeight($width_d, $height_d) 
+    {
+        $this->gd_d = imagecreatetruecolor($width_d, $height_d);
+        // desactivo el procesamiento automatico de alpha
+        imagealphablending($this->gd_d, false);
+        // hago que el alpha original se grabe en el archivo destino
+        imagesavealpha($this->gd_d, true);
+        imagecopyresampled($this->gd_d, $this->gd_s, 0, 0, 0, 0, $width_d, $height_d, $this->width_s, $this->height_s);
+    }
+    
+    /**
+    * Graba la imagen a un archivo de destino
+    * @param    string  Nombre del archivo de salida
+    */
+    function save($file_d) 
+    {
+        imagepng($this->gd_d, $file_d);
+        imagedestroy($this->gd_d);
+    }
+}
+
+?>

@@ -1,0 +1,77 @@
+<?php
+/**
+ *  Objeto Estadistico, contiene todas las llamadas necesarias para estadisticas
+ *
+ * @author    Orlando Contreras
+ * @version   0.01
+ * @copyright GPL v2
+ */
+ 
+class Estadistico {
+	
+	
+	public function TblExist($tabla){ 	
+		global $db_estadistico;
+		$Existe = FALSE;
+		$my_tables = $db_estadistico->get_results("SHOW TABLES",ARRAY_N);
+		foreach ( $my_tables as $table )
+		{
+			if ($table[0] == $tabla) {
+				$Existe = TRUE;
+				break;
+			}
+		}
+		return $Existe;
+	}
+
+	public function CreateTbl($tabla){
+	global $db_estadistico;
+// Create a MySQL table
+$db_estadistico->query("CREATE TABLE $tabla (`id` bigint(20) unsigned NOT NULL auto_increment,  `Fecha` int(11) default NULL,  `Actor` int(11) NOT NULL,  `NUI` int(11) NOT NULL,  `Serial1` varchar(200) default NULL,  `Serial2` varchar(200) default NULL,  `Serial3` varchar(200) default NULL,  `Serial4` varchar(200) default NULL,  `Serial5` varchar(200) default NULL,  `Serial6` varchar(200) default NULL,  `Uso` tinyint(4) default NULL,  `Estado` tinyint(4) default NULL,  `Qty` tinyint(4) NOT NULL,  `Ubicacion` varchar(10) default NULL,  `Dimension` varchar(20) default NULL,  Grupo int(11) default NULL, PRIMARY KEY  (`id`)) " );
+	}
+	
+	public function Instantanea($actor){ // Guarda en al tabla Estadistico los registros de Existencias.
+		
+		global $db, $db_estadistico, $sesion;
+		
+		$ahora = (time() - (5*60*60)) ;
+		
+		$TblEstadistico = "Estadistico_" . date("ym");
+		
+		if (!$this->TblExist($TblEstadistico)) {
+			$this->CreateTbl($TblEstadistico);
+		}
+        $Grupo=$sesion->get_var('empresa');
+        $sqlestadis="SELECT '" . $ahora . "', Actor, id, Serial1, Serial2, Serial3, Serial4, Serial5, Serial6, Uso, Estado, Qty, Ubicacion, Dimension FROM Existencia WHERE ((Existe = 1)  AND (Actor= $actor ) AND (Grupo = '".$Grupo."'))";
+        
+        if ($dataesta=$db->get_results($sqlestadis, ARRAY_N)) {
+            foreach($dataesta AS $dataes) {
+                $db_estadistico->query("INSERT INTO $TblEstadistico ( Fecha, Actor, NUI, Serial1, Serial2, Serial3, Serial4, Serial5, Serial6, Uso, Estado, Qty, Ubicacion, Dimension, Grupo)
+                        VALUES  ('". $dataes[0]."', '". $dataes[1]."', '". $dataes[2]."', '". $dataes[3]."', '". $dataes[4]."', '". $dataes[5]."', '". $dataes[5]."', '". $dataes[7]."', '". $dataes[8]."', '". $dataes[9]."', '". $dataes[10]."', '". $dataes[11]."', '". $dataes[12]."', '". $dataes[13]."', '".$Grupo."' )");
+            }
+        }
+		/*
+		$sql = "INSERT INTO $TblEstadistico ( Fecha, Actor, NUI, Serial1, Serial2, Serial3, Serial4, Serial5, Serial6, Uso, Estado, Qty, Ubicacion, Dimension, Grupo) SELECT '" . $ahora . "', Actor, id, Serial1, Serial2, Serial3, Serial4, Serial5, Serial6, Uso, Estado, Qty, Ubicacion, Dimension, Grupo FROM Existencia WHERE ((Existe = 1)  AND (Actor= $actor ) AND (Grupo = '".$sesion->get_var('empresa')."'))";
+		
+		if (!$db->query($sql)){
+			return FALSE;
+		}
+*/
+		return TRUE;
+	}
+
+	/**
+	* Devuelve los datos estadisticos en unperiodo dado
+	* @param   $Desde Fecha desde
+	* @param   $Hasta Fecha Hasta
+	* @param   $Actor
+	* @access protected
+	*/
+	
+	protected function GetEstadistico( $Desde, $Hasta, $Actor='')
+	 {
+		trigger_error('Not Implemented!', E_USER_WARNING);
+	}
+
+}
+?>

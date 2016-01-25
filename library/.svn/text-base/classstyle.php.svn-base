@@ -1,0 +1,119 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2007 Jose Antonio Cely Saidiza
+*  Email jose.cely@gmail.com
+*  Bogotá Colombia
+****************************************************************************/
+
+/**
+* objeto para manejo de estilos, apoyado en MySQL
+* @author Jose Antonio Cely Saidiza <jose.cely@gmail.com>
+* @version 0.01
+* TODO: 
+* - Funciones de depuración
+* - Documentar más a fondo
+*/
+class Stylebd {
+    
+    private $Actor = 1;
+    private $table = 'Stylebd';
+    private $Background = '#FFFFCC';
+    private $Fontcolor = '#000000';
+    private $Fonttype = 'Arial,sans-serif';
+    private $Size = '12';
+    private $Bold = false;
+    private $Italic = false;
+    private $Underline = false;
+    private $names;
+    
+    private $fontypesvalues;
+
+	/**
+        * Si hay un Actor cargado por el ID cargará el fitro
+        */    
+	function __construct($Actor = null){
+        global $db;
+        
+        if($Actor) {
+                $this->Actor = $Actor;
+        }
+        $this->names[0]='Encabezado';
+        $this->names[1]='Encabezado Mini';
+        $this->names[2]='Contenido';
+        $this->names[3]='Pie Mini';
+        $this->names[4]='Pie';
+        
+        $this->fontypesvalues['']="[default]";
+        $this->fontypesvalues['Arial,sans-serif']="Arial";
+        $this->fontypesvalues['Arial Black,sans-serif']="Arial Black";
+        $this->fontypesvalues['Arial Narrow,sans-serif']="Arial Narrow";
+        $this->fontypesvalues['Bookman Old Style,serif']="Bookman Old Style";
+        $this->fontypesvalues['Century Gothic,sans-serif']="Century Gothic";
+        $this->fontypesvalues['Comic Sans MS,sans-serif']="Comic Sans MS";
+        $this->fontypesvalues['Courier New,monospace']="Courier New";
+        $this->fontypesvalues['Georgia,serif']="Georgia";
+        $this->fontypesvalues['Impact,sans-serif']="Impact";
+        $this->fontypesvalues['Lucida Console,monospace']="Lucida Console";
+        $this->fontypesvalues['Tahoma,sans-serif']="Tahoma";
+        $this->fontypesvalues['Times New Roman,serif']="Times New Roman";
+        $this->fontypesvalues['Trebuchet MS,sans-serif']="Trebuchet MS";
+        $this->fontypesvalues['Verdana,sans-serif']="Verdana";
+    }
+    
+	/**
+        * REtorna un estilo
+        */	
+	function GetStyle($id) {
+		global $db;
+        
+        if ($styles = $db->get_row("SELECT Background, Fontcolor, Fonttype, Size, Bold, Italic, Underline FROM ".$this->table." WHERE Actor = '".$this->Actor."' AND Style = '".$id."'")) {
+           $tyle[0]=$this->names[$id];
+           $tyle[1]=$styles->Background;
+           $tyle[2]=$styles->Fontcolor;
+           $tyle[3]=$styles->Fonttype;
+           $tyle[4]=$styles->Size;
+           $tyle[5]=$styles->Bold;
+           $tyle[6]=$styles->Italic;
+           $tyle[7]=$styles->Underline;
+        } else { // si no hay estilos carga el default
+           $tyle[0]=$this->names[$id];        
+           $tyle[1]=$this->Background;
+           $tyle[2]=$this->Fontcolor;
+           $tyle[3]=$this->Fonttype;
+           $tyle[4]=$this->Size;
+           $tyle[5]=$this->Bold;
+           $tyle[6]=$this->Italic;
+           $tyle[7]=$this->Underline;
+        }
+        return $tyle;
+	}
+
+
+	function SetStyle($idst, $values) {	
+        global $db;
+        if ($id=$db->get_var("SELECT id FROM ".$this->table." WHERE Actor = '".$this->Actor."' AND Style = '".$idst."'")) { // si actualiza
+                $sql="UPDATE `Stylebd` SET `Background` = '".$values[0]."', `Fontcolor` = '".$values[1]."', `Fonttype` = '".$values[2]."', `Size` = '".$values[3]."', `Bold` = '".$values[4]."', `Italic` = '".$values[5]."', `Underline` = '".$values[6]."' WHERE id = '".$id."' LIMIT 1";            
+                $db->query($sql);            
+        } else { // si tiene que crear un nuevo resgitso
+                $sql="INSERT INTO ".$this->table." (`Style`, `Actor`, `Background`, `Fontcolor`, `Fonttype`, `Size`, `Bold`, `Italic`, `Underline`)VALUES ('".$idst."', '".$this->Actor."', '".$values[0]."', '".$values[1]."', '".$values[2]."', '".$values[3]."', '".$values[4]."', '".$values[5]."' , '".$values[6]."');";            
+                $db->query($sql);
+        }
+	}
+    
+    function GetFonts() {
+      return $this->fontypesvalues;   
+    }
+}
+?>

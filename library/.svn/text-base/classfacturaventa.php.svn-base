@@ -1,0 +1,216 @@
+<?php
+/* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Library General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*  Copyright  2007 Jose Antonio Cely Saidiza
+*  Email jose.cely@gmail.com
+*  Bogotá Colombia
+****************************************************************************/
+
+/*
+Vars content
+
+  `id` int(11)
+  `Clase` tinyint(4)
+  `Grupo` smallint(6)
+  `Subserie` int(11)
+  `Fecha` int(11) -> Fecha Factura
+  `Genera` smallint(6) -> id generador del documento
+  `Recibe` smallint(6) -> id recibe el documento
+  `Impresiones` smallint(6)
+  `BloqImpresion` binary(1)
+  `Bloqueado` binary(1)
+  `Var0` tinyint(4)
+  `Var1` double  -> Total
+  `Var2` double  -> Total antes de Iva
+  `Var3` varchar(10) -> Porcentaje de descuento
+  `Var4` varchar(100) -> id vendedor
+  `Var5` varchar(255) 
+  `Var6` text -> Formas de pago de la forma "idforma,fecha,valor,cajero"
+  `Var7` int(11) -> cajero
+  `Contenido` text -> contenido de la forma "cantidad,idproducto,precioventa"
+  `Ultimaimpresion` int(11) default NULL,
+  `Ultimaedicion` int(11) default NULL,
+  `Estado` tinyint(4) NOT NULL default '1',
+
+*/
+class factura_venta extends documento {
+
+	private $classid = 1;	// id del documento
+		
+	function __construct(){		// creo factura
+		parent::__construct($this->classid);
+	}
+
+
+	public function seleccionadocumento($id){		// cargo factura
+		if (parent::seleccionadocumento($id)) {
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+	
+	
+	public function imprimirhtml($aumenta = TRUE){		// cargo factura
+		if (parent::imprimirhtml($aumenta)) {
+			// contenido
+			$tdborder=$this->styleborder;
+			echo "\n<table align=\"center\" class=\"".$this->styletable."\">\n"; // encabezado tabla"
+			echo "<tr class=\"$this->stylecontent\">";
+			echo "<td class=\"$tdborder\" width=\"5%\"><div class=\"$this->titlessmall\">Cantidad</div></td>";
+			echo "<td class=\"$tdborder\"><div class=\"$this->titlessmall\">Descripcion</div></td>";
+			echo "<td class=\"$tdborder\" width=\"15%\"><div class=\"$this->titlessmall\">Vr Unitario</div></td>";
+			echo "<td class=\"$tdborder\" width=\"18%\"><div class=\"$this->titlessmall\">TOTAL</div></td>";
+			echo "</tr>\n";
+			
+			$infoprods = explode ('||', $this->Contenido);
+			foreach ($infoprods as $infoprod) {
+				echo "<tr class=\"$this->stylecontent\">";
+				$producto = explode (',', $infoprod);
+
+				$total=$producto[0]*$producto[2];
+				echo "<td><div align=\"left\">$producto[0]</div></td>";
+				echo "<td><div align=\"left\">$producto[1] df fds sdf df df </div></td>";
+				echo "<td><div align=\"right\">$ $producto[2]</div></td>";
+				echo "<td><div align=\"right\">$ $total</div></td>";
+				echo "</tr>\n";				
+			}			
+			$IVA=$this->Var1-$this->Var2;
+			echo "<tr class=\"$this->stylecontent\">";
+			echo "<td></td>";
+			echo "<td></td>";
+			echo "<td class=\"$tdborder\" width=\"15%\"><div class=\"$this->titlessmall\">Sutotal</div></td>";
+			echo "<td class=\"$tdborder\" width=\"18%\"><div class=\"$this->titlessmall\">$ $this->Var2</div></td>";
+			echo "</tr>\n";			
+			echo "<tr class=\"$this->stylecontent\">";
+			echo "<td></td>";
+			echo "<td></td>";
+			echo "<td class=\"$tdborder\" width=\"15%\"><div class=\"$this->titlessmall\">IVA</div></td>";
+			echo "<td class=\"$tdborder\" width=\"18%\"><div class=\"$this->titlessmall\">$ $IVA</div></td>";
+			echo "</tr>\n";
+			echo "<tr class=\"$this->stylecontent\">";
+			echo "<td></td>";
+			echo "<td></td>";
+			echo "<td class=\"$tdborder\" width=\"15%\"><div class=\"$this->titlessmall\">TOTAL</div></td>";
+			echo "<td class=\"$tdborder\" width=\"18%\"><div class=\"$this->titlessmall\">$ $this->Var1</div></td>";
+			echo "</tr>\n";			
+			echo "</table>\n";
+			// Cierre del doc en html
+			echo "\n<table class=\"".$this->styletable."\">\n"; // encabezado tabla
+			echo "<tr class=\"$this->stylefoother\">";
+			echo "<td class=\"$tdborder\">$this->Pie</td>";
+			echo "</tr>\n";
+			echo "</table>\n";
+			if ($this->PieSmall!='') {
+				echo "<table class=\"".$this->styletable."\">\n"; 
+				echo "<tr class=\"$this->stylefoother\">";
+				echo "$this->PieSmall";
+				echo "</tr>\n";
+			}	
+			echo "</table>\n";
+			if ($this->Estadisticas) {
+				echo "";
+			}
+			// poner siempre este div a lcerrar el documento
+			echo "</div>\n";		
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+
+
+	public function imprimirpdf($aumenta = TRUE){		// cargo factura
+		if (parent::imprimirpdf($aumenta)) {
+			// contenido
+			$this->pdf->Ln(); //salto de linea
+			$this->pdf->SetFillColor(230,230,230); // relleno gris
+		
+			$this->pdf->SetFont('Arial','B',10);
+			// ancho de las columnas 196mm es el ancho total
+			$w=array(17,114,30,35);
+			// titulos
+			$header=array('Cantidad','Descripcion','Vr Unitario','TOTAL');
+				for($i=0;$i<count($header);$i++){
+				$this->pdf->Cell($w[$i],7,$header[$i],1,0,'C',1);
+			}
+			
+			$this->pdf->Ln(8);
+			$this->pdf->SetFont('Arial','',8);		
+			$infoprods = explode ('||', $this->Contenido);
+			foreach ($infoprods as $infoprod) {
+				$producto = explode (',', $infoprod);
+				$total=$producto[0]*$producto[2];
+
+				$header=array(''.$producto[0].'',''.$producto[1].' df fds sdf df df ','$ '.$producto[2].'','$ '.$total.'');
+				for($i=0;$i<count($header);$i++){
+					if ($i<2) {
+						$this->pdf->Cell($w[$i],7,$header[$i],0,0,'L',1);
+					} else {
+						$this->pdf->Cell($w[$i],7,$header[$i],0,0,'R',1);					
+					}
+				}
+				$this->pdf->Ln();
+			}
+			$IVA=$this->Var1-$this->Var2;
+			$this->pdf->Ln(1);
+			$this->pdf->SetX(141);
+			$this->pdf->Cell(30,7,'Subtotal',1,0,'C',1);
+			$this->pdf->Cell(35,7,$this->Var2,1,0,'C',1);				
+			$this->pdf->Ln();
+			$this->pdf->SetX(141);
+			$this->pdf->Cell(30,7,'IVA',1,0,'C',1);
+			$this->pdf->Cell(35,7,$IVA,1,0,'C',1);	
+			$this->pdf->Ln();		
+			$this->pdf->SetX(141);
+			$this->pdf->Cell(30,7,'TOTAL',1,0,'C',1);
+			$this->pdf->Cell(35,7,$this->Var1,1,0,'C',1);
+			$this->pdf->Ln();
+			$this->pdf->SetFillColor(252,239,128); // relleno amarillo
+			$this->pdf->Ln(1);
+							
+			if ($this->Pie!='') {
+				$this->pdf->SetFont('Arial','',8);
+				$this->pdf->Cell(0,4,$this->Pie,1,1,'C',1);
+				$this->pdf->Ln(1);
+			}
+			
+			$this->pdf->Cell(95,30,'',1,0,'',1);
+			$this->pdf->Cell(6,30,'','LR',0,'',1);		
+			$this->pdf->Cell(95,30,'',1,0,'',1);
+			$this->pdf->SetX(0);
+			$this->pdf->Ln(2.5);							
+			$this->pdf->Cell(95,0,'Aceptada:',0,0,'C');
+			$this->pdf->Cell(6,0,'',0,0,'C');		
+			$this->pdf->Cell(95,0,'Atentamente:',0,0,'C');	
+			
+			$this->pdf->Output('factura_'.$this->Subserie.'.pdf','D');		
+			
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+				
+	public function creardocumento($Grupo,$productos,$Genera,$Recibe,$Ciudad,$total,$totalantesdeiva,$porcentajedcto,$vendedor,$cajero,$formasdepago){
+		global $db;
+		parent::creardocumento($Grupo,$productos,$Genera,$Recibe,$Ciudad);	// cargo los productos en contenido
+		$sql = "INSERT INTO `Documento` (Grupo, Clase, Subserie, Fecha, Ciudad, Genera, Recibe, Var1, Var2, Var3, Var4, Var6, Var7, Contenido) VALUES ('$this->Grupo', '$this->Clase', '$this->Subserie', '$this->Fecha', '$this->Ciudad', '$this->Genera', '$this->Recibe', '$total', '$totalantesdeiva', '$porcentajedcto', '$vendedor', '$formasdepago', '$cajero', '$this->Contenido')";
+		$db->query($sql);
+		parent::seleccionadocumento($this->id);
+		return $this->id;		
+	}
+}
+
+?>
