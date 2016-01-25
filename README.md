@@ -1,0 +1,2 @@
+# trainingit
+Capacitación de GIT
