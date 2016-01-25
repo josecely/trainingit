@@ -60,7 +60,7 @@ if(isset($_GET['pick'])){
 		} else {
 			$barra=$_GET[Codigobarra];
 		}
-        
+        //Ejemplo aaaa
 		$infodelprod=$db->get_row("SELECT Producto.id, Linea.Actor FROM Producto LEFT JOIN Linea ON Producto.Linea = Linea.id WHERE Codigobarra = '".$barra."'");
         $idprod=$infodelprod->id;
         
